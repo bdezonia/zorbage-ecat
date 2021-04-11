@@ -1,0 +1,27 @@
+zorbage-ecat: code for reading ecat data files into zorbage structures for further processing
+
+To learn more about Zorbage please visit https://github.com/bdezonia/zorbage
+
+Code example to open an Ecat data file:
+
+  DataBundle results = Ecat.open("petimage.v");
+
+How to include zorbage-ecat in your Maven project
+
+  Add the following dependency to your project's pom.xml:
+  
+  <dependency>
+    <groupId>io.github.bdezonia</groupId>
+    <artifactId>zorbage-ecat</artifactId>
+    <version>0.0.1</version>
+  </dependency>
+  
+How to include zorbage-ecat in a different build system
+
+  See https://search.maven.org/artifact/io.github.bdezonia/zorbage-ecat/0.0.1/jar
+  for instructions on how to reference zorbage-ecat in build systems such as
+  Gradle or others.
+
+All about the ecat file format:
+  
+  <TODO>

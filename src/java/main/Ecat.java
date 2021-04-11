@@ -35,7 +35,7 @@ public class Ecat {
 			short swVersion = readShort(data,false);
 			short systemType = readShort(data,false);
 			short fileType = readShort(data,false);
-			// TODO: I may have read that the header is always big endian so this code might be wrong
+			// TODO: I may have read that the header is always big endian so this code might not work
 			if (fileType < 0 || fileType > 127) {
 				fileIsBigEndian = true;
 				swVersion = swapShort(swVersion);
@@ -227,7 +227,12 @@ public class Ecat {
 		int exponent = (bits >> 23) & 0xff;
 		int mantissa = (bits >> 0) & (2^23 - 1);
 		
-		return (-1.0 * sign) * (1.0 + ((1.0 * mantissa) / 2^23)) * Math.pow(2, exponent - 129);
+		double value = (1.0 + ((1.0 * mantissa) / 2^23)) * Math.pow(2, exponent - 129);
+
+		if (sign == 0)
+			return value;
+		
+		return -value;
 	}
 
 	private static short swapShort(short in) {

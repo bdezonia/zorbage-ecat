@@ -8,7 +8,12 @@ import java.io.IOException;
 
 import nom.bdezonia.zorbage.algebra.Allocatable;
 import nom.bdezonia.zorbage.algebra.G;
+import nom.bdezonia.zorbage.algorithm.GridIterator;
+import nom.bdezonia.zorbage.data.DimensionedDataSource;
+import nom.bdezonia.zorbage.data.DimensionedStorage;
 import nom.bdezonia.zorbage.misc.DataBundle;
+import nom.bdezonia.zorbage.sampling.IntegerIndex;
+import nom.bdezonia.zorbage.sampling.SamplingIterator;
 import nom.bdezonia.zorbage.type.integer.int16.SignedInt16Member;
 import nom.bdezonia.zorbage.type.integer.int32.SignedInt32Member;
 import nom.bdezonia.zorbage.type.integer.int8.UnsignedInt8Member;
@@ -132,6 +137,7 @@ public class Ecat {
 				fillA[i] = readShort(data,fileIsBigEndian);
 			}
 			
+			long[] dims;
 			short dataType;
 			short numDimensions;
 			int frameDuration;
@@ -156,10 +162,20 @@ public class Ecat {
 				
 				dataType = readShort(data,fileIsBigEndian);
 				numDimensions = readShort(data,fileIsBigEndian);
+				dims = new long[numDimensions];
 				short attenType = readShort(data,fileIsBigEndian); // Added TJB 20170223
 				numRElements = readShort(data,fileIsBigEndian);
 				numAngles = readShort(data,fileIsBigEndian);   
-				short numZElements = readShort(data,fileIsBigEndian);   
+				short numZElements = readShort(data,fileIsBigEndian);
+				if (numDimensions > 0)
+					dims[0] = numRElements;
+				if (numDimensions > 1)
+					dims[1] = numAngles;
+				if (numDimensions > 2)
+					dims[2] = numZElements;
+				for (int i = 3; i < numDimensions; i++) {
+					dims[i] = 1;
+				}
 				// short correctionsApplied = readShort(data,fileIsBigEndian); // Removed TJB 20170223
 				ringDifference = readShort(data,fileIsBigEndian);
 				float xPixelResolution = readFloat(data,fileIsBigEndian);
@@ -168,7 +184,7 @@ public class Ecat {
 				float wPixelResolution = readFloat(data,fileIsBigEndian);
 				scaleFactor = readFloat(data,fileIsBigEndian);
 				xOffset = readFloat(data,fileIsBigEndian);
-				yOffset = readShort(data,fileIsBigEndian);
+				yOffset = readFloat(data,fileIsBigEndian);
 				float xRadius = readFloat(data,fileIsBigEndian);
 				float yRadius = readFloat(data,fileIsBigEndian);
 				float tiltAngle = readFloat(data,fileIsBigEndian);
@@ -179,7 +195,7 @@ public class Ecat {
 				short numAdditionalAttenCoeff = readShort(data,fileIsBigEndian);
 				float edgeFindingThreshold = readFloat(data,fileIsBigEndian);
 				float[] additionalAttenCoeff = new float[8];
-				for (int i = 0; i < 8; i++) {
+				for (int i = 0; i < additionalAttenCoeff.length; i++) {
 					additionalAttenCoeff[i] = readFloat(data,fileIsBigEndian);
 				}
 				storageOrder = readShort(data,fileIsBigEndian);
@@ -215,9 +231,16 @@ public class Ecat {
 			
 				dataType = readShort(data,fileIsBigEndian);
 				numDimensions = readShort(data,fileIsBigEndian);
+				dims = new long[numDimensions];
 				short xDimension = readShort(data,fileIsBigEndian);
 				short yDimension = readShort(data,fileIsBigEndian);
 				short zDimension = readShort(data,fileIsBigEndian);
+				dims[0] = xDimension;
+				dims[1] = yDimension;
+				dims[2] = zDimension;
+				for (int i = 3; i < numDimensions; i++) {
+					dims[i] = 1;
+				}
 				xOffset = readFloat(data,fileIsBigEndian);
 				yOffset = readFloat(data,fileIsBigEndian);
 				zOffset = readFloat(data,fileIsBigEndian);
@@ -276,6 +299,8 @@ public class Ecat {
 			
 			case 11:  // 3d scan (sinogram) data file
 				
+				dims = new long[0];
+				System.out.println("0 dims returned because I cannot yet understand 3d scan (sinogram) spatial layout");
 				dataType = readShort(data,fileIsBigEndian);
 				numDimensions = readShort(data,fileIsBigEndian);
 				numRElements = readShort(data,fileIsBigEndian);
@@ -336,6 +361,8 @@ public class Ecat {
 			
 			case 13:  // 3d normalization
 			
+				dims = new long[0];
+				System.out.println("0 dims returned because I cannot yet understand 3d normalization spatial layout");
 				dataType = readShort(data,fileIsBigEndian);
 				numRElements = readShort(data,fileIsBigEndian);
 				short numTransaxialXtal = readShort(data,fileIsBigEndian);   
@@ -378,6 +405,19 @@ public class Ecat {
 				System.out.println("ECAT: unknown file type ("+fileType+") : no data was read!");
 				return new DataBundle();
 			}
+			
+			Allocatable type = value(dataType);
+			
+			DimensionedDataSource d = DimensionedStorage.allocate(type, dims);
+			
+			SamplingIterator<IntegerIndex> iter = GridIterator.compute(dims);
+			IntegerIndex idx = new IntegerIndex(dims.length);
+			while (iter.hasNext()) {
+				iter.next(idx);
+				readValue(data, type, dataType, fileIsBigEndian);
+				d.set(idx, type);
+			}
+			
 		} catch (IOException e) {
 			try {
 				if (data != null)
@@ -567,5 +607,9 @@ public class Ecat {
 		int b2 = (in >> 16) & 0xff;
 		int b3 = (in >> 24) & 0xff;
 		return (b0 << 24) | (b1 << 16) | (b2 << 8) | (b3 << 0);
+	}
+	
+	public static void main(String[] args) {
+		DataBundle data = Ecat.load("/home/bdz/Desktop/099_S_2146_881_2be9_de11.v");
 	}
 }

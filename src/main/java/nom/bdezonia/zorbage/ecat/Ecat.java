@@ -68,7 +68,7 @@ public class Ecat {
 			int scanStartTime = readInt(data,fileIsBigEndian);
 			String isotopeName = readString(data,8);
 			float isotopeHalflife = readFloat(data,fileIsBigEndian);
-			String radiopharaceutical = readString(data,32);
+			String radiopharmaceutical = readString(data,32);
 			float gantryTilt = readFloat(data,fileIsBigEndian);
 			float gantryRotation = readFloat(data,fileIsBigEndian);
 			float bedElevation = readFloat(data,fileIsBigEndian);
@@ -84,7 +84,7 @@ public class Ecat {
 			short calibrationUnits = readShort(data,fileIsBigEndian);
 			short calibrationUnitsLabel = readShort(data,fileIsBigEndian);
 			short compressionCode = readShort(data,fileIsBigEndian);
-			String studType = readString(data,12);
+			String studyType = readString(data,12);
 			String patientId = readString(data,16);
 			String patientName = readString(data,32);
 			String patientSex = readString(data,1);
@@ -155,6 +155,7 @@ public class Ecat {
 			float scaleFactor;
 			float xOffset, yOffset, zOffset;
 			float xResolution, yResolution, zResolution, wResolution;
+			short[] fillUser;
 			
 			switch (fileType) {
 			
@@ -193,20 +194,24 @@ public class Ecat {
 				float attenuationMax = readFloat(data,fileIsBigEndian);
 				float skullThickness = readFloat(data,fileIsBigEndian);
 				short numAdditionalAttenCoeff = readShort(data,fileIsBigEndian);
-				float edgeFindingThreshold = readFloat(data,fileIsBigEndian);
 				float[] additionalAttenCoeff = new float[8];
 				for (int i = 0; i < additionalAttenCoeff.length; i++) {
 					additionalAttenCoeff[i] = readFloat(data,fileIsBigEndian);
 				}
+				float edgeFindingThreshold = readFloat(data,fileIsBigEndian);
 				storageOrder = readShort(data,fileIsBigEndian);
 				span = readShort(data,fileIsBigEndian);
-				for (int i = 0; i < 64; i++) {
-					// throw away z elements?
-					readShort(data,fileIsBigEndian);
+				short[] zElements = new short[64];
+				for (int i = 0; i < zElements.length; i++) {
+					zElements[i] = readShort(data,fileIsBigEndian);
 				}
-				for (int i = 0; i < 86+50; i++) {
-					// throw away fill elements?
-					readShort(data,fileIsBigEndian);
+				short[] fillUnused = new short[86];
+				for (int i = 0; i < fillUnused.length; i++) {
+					fillUnused[i] = readShort(data,fileIsBigEndian);
+				}
+				fillUser = new short[50];
+				for (int i = 0; i < fillUser.length; i++) {
+					fillUser[i] = readShort(data,fileIsBigEndian);
 				}
 				
 				/*
@@ -272,10 +277,15 @@ public class Ecat {
 				float filterScatterFraction = readFloat(data,fileIsBigEndian);
 				float filterScatterSlope = readFloat(data,fileIsBigEndian);
 				String annotation = readString(data, 40);
-				float[] transformationMatrix = new float[9];
-				for (int i = 0; i < transformationMatrix.length; i++) {
-					transformationMatrix[i] = readFloat(data,fileIsBigEndian);
-				}
+				float m_1_1 = readFloat(data,fileIsBigEndian);
+				float m_1_2 = readFloat(data,fileIsBigEndian);
+				float m_1_3 = readFloat(data,fileIsBigEndian);
+				float m_2_1 = readFloat(data,fileIsBigEndian);
+				float m_2_2 = readFloat(data,fileIsBigEndian);
+				float m_2_3 = readFloat(data,fileIsBigEndian);
+				float m_3_1 = readFloat(data,fileIsBigEndian);
+				float m_3_2 = readFloat(data,fileIsBigEndian);
+				float m_3_3 = readFloat(data,fileIsBigEndian);
 				float rfilterCutoff = readFloat(data,fileIsBigEndian);
 				float rfilterResolution = readFloat(data,fileIsBigEndian);
 				short rfilterCode = readShort(data,fileIsBigEndian);
@@ -284,15 +294,19 @@ public class Ecat {
 				float zfilterResolution = readFloat(data,fileIsBigEndian);
 				short zfilterCode = readShort(data,fileIsBigEndian);
 				short zfilterOrder = readShort(data,fileIsBigEndian);
-				float[] transformationMatrix2 = new float[3];
-				for (int i = 0; i < transformationMatrix2.length; i++) {
-					transformationMatrix2[i] = readFloat(data,fileIsBigEndian);
-				}
+				float m_1_4 = readFloat(data,fileIsBigEndian);
+				float m_2_4 = readFloat(data,fileIsBigEndian);
+				float m_3_4 = readFloat(data,fileIsBigEndian);
 				short scatterType = readShort(data,fileIsBigEndian);
 				short reconType = readShort(data,fileIsBigEndian);
 				short reconViews = readShort(data,fileIsBigEndian);
-				for (int i = 0; i < 87+49; i++) {
-					readShort(data,fileIsBigEndian);
+				short[] fillCti = new short[87];
+				for (int i = 0; i < fillCti.length; i++) {
+					fillCti[i] = readShort(data,fileIsBigEndian);
+				}
+				fillUser = new short[49];
+				for (int i = 0; i < fillUser.length; i++) {
+					fillUser[i] = readShort(data,fileIsBigEndian);
 				}
 				//sz = [sh.x_dimension sh.y_dimension sh.z_dimension];
 				break;
@@ -414,7 +428,7 @@ public class Ecat {
 			IntegerIndex idx = new IntegerIndex(dims.length);
 			while (iter.hasNext()) {
 				iter.next(idx);
-				readValue(data, type, dataType, fileIsBigEndian);
+				readValue(data, dataType, fileIsBigEndian, type);
 				d.set(idx, type);
 			}
 			
@@ -455,7 +469,7 @@ public class Ecat {
 		}
 	}
 
-	private static void readValue(DataInputStream d, Allocatable type, short dataType, boolean fileIsBigEndian) throws IOException {
+	private static void readValue(DataInputStream d, short dataType, boolean fileIsBigEndian, Allocatable type) throws IOException {
 		byte tb;
 		short ts;
 		int ti;

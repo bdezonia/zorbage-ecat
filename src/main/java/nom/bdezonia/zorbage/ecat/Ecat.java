@@ -22,16 +22,7 @@ import nom.bdezonia.zorbage.type.real.float64.Float64Member;
 
 public class Ecat {
 	
-	/*
-	 * 
-	 * ECAT data type:
-     *   unknown = 0, byte = 1, vaxi2_little = 2, vaxi4_little = 3,
-     *   vaxr4 = 4, float(big?) = 5, suni2_big = 6, suni4_big = 7
-     *  (maybe float-big should be last: two sources disagree)
-     *  (as it is now is using the best info I have found from multiple sources)
-     *  (is byte signed: I don't think so. some sources imply no)
-	 * 
-	 */ 
+	// NOTE: so far headers are all from ecat 7. I can also make it support ecat 6 with more work.
 	
 	public static DataBundle load(String filename) {
 
@@ -213,23 +204,6 @@ public class Ecat {
 				for (int i = 0; i < fillUser.length; i++) {
 					fillUser[i] = readShort(data,fileIsBigEndian);
 				}
-				
-				/*
-				switch (dataType) {
-				case 5: // IEEE float (32 bit)
-				//     sz = [sh.num_z_elements sh.num_angles (dirtable(3)-dirtable(2))*512/sh.num_z_elements/sh.num_angles/4];
-				    // Modified TJB 20170223 so sz organized as [r,theta,z]
-				    sz = [(dirtable(3)-dirtable(2))*512/sh.num_z_elements/sh.num_angles/4 sh.num_angles sh.num_z_elements];
-					break;
-				
-				case 6: // SUN int16
-				    sz = [sh.num_z_elements sh.num_angles (dirtable(3)-dirtable(2))*512/sh.num_z_elements/sh.num_angles/2];
-					break;
-				
-				default:
-				    warning('readECAT7: unrecognized data type');
-				}
-				*/
 				break;
 				
 			case 7:  // image data
@@ -308,19 +282,23 @@ public class Ecat {
 				for (int i = 0; i < fillUser.length; i++) {
 					fillUser[i] = readShort(data,fileIsBigEndian);
 				}
-				//sz = [sh.x_dimension sh.y_dimension sh.z_dimension];
 				break;
 			
 			case 11:  // 3d scan (sinogram) data file
 				
-				dims = new long[0];
-				System.out.println("0 dims returned because I cannot yet understand 3d scan (sinogram) spatial layout");
 				dataType = readShort(data,fileIsBigEndian);
 				numDimensions = readShort(data,fileIsBigEndian);
 				numRElements = readShort(data,fileIsBigEndian);
 				numAngles = readShort(data,fileIsBigEndian);
 				short correctionsApplied = readShort(data,fileIsBigEndian);
 				numZElements = readShort(data,fileIsBigEndian);
+				dims = new long[numDimensions];
+				if (numDimensions > 0)
+					dims[0] = numRElements;
+				if (numDimensions > 1)
+					dims[1] = numAngles;
+				if (numDimensions > 2)
+					dims[2] = numZElements;
 				ringDifference = readShort(data,fileIsBigEndian);
 				xResolution = readFloat(data,fileIsBigEndian);
 				yResolution = readFloat(data,fileIsBigEndian);
@@ -358,25 +336,22 @@ public class Ecat {
 				for (int i = 0; i < physicalPlanes.length; i++) {
 					physicalPlanes[i] = readInt(data,fileIsBigEndian);
 				}
-				/*
-				// Changed by BTC on 3/31/04
-				//sz = [sh.num_r_elements sh.num_angles (dirtable(3)-dirtable(2)-1)*512/sh.num_r_elements/sh.num_angles/2];
-				//sz = [sh.num_r_elements (dirtable(3)-dirtable(2)-1)*512/sh.num_r_elements/sh.num_angles/2 sh.num_angles];
-				for i = 1:length(find(sh.num_z_elements));
-				       sz(:,i) = [sh.num_r_elements sh.num_z_elements(i) sh.num_angles];
-				end
-				*/				
 				break;
 			
 			case 13:  // 3d normalization
 			
-				dims = new long[0];
-				System.out.println("0 dims returned because I cannot yet understand 3d normalization spatial layout");
 				dataType = readShort(data,fileIsBigEndian);
 				numDimensions = readShort(data,fileIsBigEndian);
 				numRElements = readShort(data,fileIsBigEndian);
 				numAngles = readShort(data,fileIsBigEndian);
 				numZElements = readShort(data,fileIsBigEndian);
+				dims = new long[numDimensions];
+				if (numDimensions > 0)
+					dims[0] = numRElements;
+				if (numDimensions > 1)
+					dims[1] = numAngles;
+				if (numDimensions > 2)
+					dims[2] = numZElements;
 				ringDifference = readShort(data,fileIsBigEndian);
 				scaleFactor = readFloat(data,fileIsBigEndian);
 				float normMin = readFloat(data,fileIsBigEndian);
@@ -398,7 +373,6 @@ public class Ecat {
 				for (int i = 0; i < fillUser.length; i++) {
 					fillUser[i] = readShort(data,fileIsBigEndian);
 				}
-				//sz = [(((dirtable(3) - dirtable(2) + 1)*512) - 512)/4 1 1];  // % -512 to account for sh 
 				break;
 			
 			default:

@@ -179,10 +179,10 @@ public class Ecat {
 				}
 				// short correctionsApplied = readShort(data,fileIsBigEndian); // Removed TJB 20170223
 				ringDifference = readShort(data,fileIsBigEndian);
-				float xPixelResolution = readFloat(data,fileIsBigEndian);
-				float yPixelResolution = readFloat(data,fileIsBigEndian);
-				float zPixelResolution = readFloat(data,fileIsBigEndian);
-				float wPixelResolution = readFloat(data,fileIsBigEndian);
+				xResolution = readFloat(data,fileIsBigEndian);
+				yResolution = readFloat(data,fileIsBigEndian);
+				zResolution = readFloat(data,fileIsBigEndian);
+				wResolution = readFloat(data,fileIsBigEndian);
 				scaleFactor = readFloat(data,fileIsBigEndian);
 				xOffset = readFloat(data,fileIsBigEndian);
 				yOffset = readFloat(data,fileIsBigEndian);
@@ -320,22 +320,17 @@ public class Ecat {
 				numRElements = readShort(data,fileIsBigEndian);
 				numAngles = readShort(data,fileIsBigEndian);
 				short correctionsApplied = readShort(data,fileIsBigEndian);
-				short[] numZElementsA = new short[64];
-				for (int i = 0; i < numZElementsA.length; i++) {
-					numZElementsA[i] = readShort(data,fileIsBigEndian);
-				}
+				numZElements = readShort(data,fileIsBigEndian);
 				ringDifference = readShort(data,fileIsBigEndian);
-				storageOrder = readShort(data,fileIsBigEndian);
-				short axialCompression = readShort(data,fileIsBigEndian);
 				xResolution = readFloat(data,fileIsBigEndian);
 				yResolution = readFloat(data,fileIsBigEndian);
 				zResolution = readFloat(data,fileIsBigEndian);
 				wResolution = readFloat(data,fileIsBigEndian);
-				short[] fillB = new short[6];
-				for (int i = 0; i < fillB.length; i++) {
-					fillB[i] = readShort(data,fileIsBigEndian);
+				short[] fill = new short[6];
+				for (int i = 0; i < fill.length; i++) {
+					fill[i] = readShort(data,fileIsBigEndian);
 				}
-				gateDuration = readInt(data,fileIsBigEndian);
+				gateDuration = readInt(data,fileIsBigEndian); // TODO: make unsigned
 				rWaveOffset = readInt(data,fileIsBigEndian);
 				numAcceptedBeats = readInt(data,fileIsBigEndian);
 				scaleFactor = readFloat(data,fileIsBigEndian);
@@ -345,23 +340,23 @@ public class Ecat {
 				int delayed = readInt(data,fileIsBigEndian);
 				int multiples = readInt(data,fileIsBigEndian);
 				int netTrues = readInt(data,fileIsBigEndian);
+				float[] corSingles = new float[16];
+				for (int i = 0; i < corSingles.length; i++) {
+					corSingles[i] = readFloat(data,fileIsBigEndian);
+				}
+				float[] uncorSingles = new float[16];
+				for (int i = 0; i < uncorSingles.length; i++) {
+					uncorSingles[i] = readFloat(data,fileIsBigEndian);
+				}
 				float totAvgCor = readFloat(data,fileIsBigEndian);
 				float totAvgUncor = readFloat(data,fileIsBigEndian);
 				int totCoinRate = readInt(data,fileIsBigEndian);
 				frameStartTime = readInt(data,fileIsBigEndian);
 				frameDuration = readInt(data,fileIsBigEndian);
-				float deadtimeCorrectionFactor = readFloat(data,fileIsBigEndian);
-				short[] fillC = new short[90];
-				for (int i = 0; i < fillC.length; i++) {
-					fillC[i] = readShort(data,fileIsBigEndian);
-				}
-				short[] fillD = new short[50];
-				for (int i = 0; i < fillD.length; i++) {
-					fillD[i] = readShort(data,fileIsBigEndian);
-				}
-				float[] uncorSingles = new float[128];
-				for (int i = 0; i < uncorSingles.length; i++) {
-					uncorSingles[i] = readFloat(data,fileIsBigEndian);
+				float lossCorrectionFactor = readFloat(data,fileIsBigEndian);
+				int[] physicalPlanes = new int[8];
+				for (int i = 0; i < physicalPlanes.length; i++) {
+					physicalPlanes[i] = readInt(data,fileIsBigEndian);
 				}
 				/*
 				// Changed by BTC on 3/31/04
@@ -378,39 +373,31 @@ public class Ecat {
 				dims = new long[0];
 				System.out.println("0 dims returned because I cannot yet understand 3d normalization spatial layout");
 				dataType = readShort(data,fileIsBigEndian);
+				numDimensions = readShort(data,fileIsBigEndian);
 				numRElements = readShort(data,fileIsBigEndian);
-				short numTransaxialXtal = readShort(data,fileIsBigEndian);   
-				short numCrystalRings = readShort(data,fileIsBigEndian);
-				short crystalsPerRing = readShort(data,fileIsBigEndian);
-				short numGeoCorrPlanes = readShort(data,fileIsBigEndian);
-				short uld = readShort(data,fileIsBigEndian);
-				short lld = readShort(data,fileIsBigEndian);
-				short scatterEnergy = readShort(data,fileIsBigEndian);
-				float normQualityFactor = readFloat(data,fileIsBigEndian);   
-				short normQualFctrCode = readShort(data,fileIsBigEndian);
-				float[] ringDtcor1 = new float[32];
-				for (int i = 0; i < ringDtcor1.length; i++) {
-					 ringDtcor1[i] = readFloat(data,fileIsBigEndian);
-				}
-				float[] ringDtcor2 = new float[32];
-				for (int i = 0; i < ringDtcor2.length; i++) {
-					 ringDtcor2[i] = readFloat(data,fileIsBigEndian);
-				}
-				float[] crystalDtcor = new float[8];
-				for (int i = 0; i < crystalDtcor.length; i++) {
-					 crystalDtcor[i] = readFloat(data,fileIsBigEndian);
-				}
+				numAngles = readShort(data,fileIsBigEndian);
+				numZElements = readShort(data,fileIsBigEndian);
+				ringDifference = readShort(data,fileIsBigEndian);
+				scaleFactor = readFloat(data,fileIsBigEndian);
+				float normMin = readFloat(data,fileIsBigEndian);
+				float normMax = readFloat(data,fileIsBigEndian);
+				float fov_source_width = readFloat(data,fileIsBigEndian);
+				float norm_quality_factor = readFloat(data,fileIsBigEndian);
+				short norm_quality_factor_code = readShort(data,fileIsBigEndian);
+				storageOrder = readShort(data,fileIsBigEndian);
 				span = readShort(data,fileIsBigEndian);
-				short maxRingDiff = readShort(data,fileIsBigEndian);
-				short[] fillE = new short[48];
-				for (int i = 0; i < fillE.length; i++) {
-					 fillE[i] = readShort(data,fileIsBigEndian);
+				zElements = new short[64];
+				for (int i = 0; i < zElements.length; i++) {
+					zElements[i] = readShort(data,fileIsBigEndian);
 				}
-				short[] user1 = new short[50];
-				for (int i = 0; i < user1.length; i++) {
-					 user1[i] = readShort(data,fileIsBigEndian);
+				fillCti = new short[123];
+				for (int i = 0; i < fillCti.length; i++) {
+					fillCti[i] = readShort(data,fileIsBigEndian);
 				}
-
+				fillUser = new short[50];
+				for (int i = 0; i < fillUser.length; i++) {
+					fillUser[i] = readShort(data,fileIsBigEndian);
+				}
 				//sz = [(((dirtable(3) - dirtable(2) + 1)*512) - 512)/4 1 1];  // % -512 to account for sh 
 				break;
 			

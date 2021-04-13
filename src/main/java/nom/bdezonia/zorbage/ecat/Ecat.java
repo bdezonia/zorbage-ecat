@@ -214,9 +214,12 @@ public class Ecat {
 				short xDimension = readShort(data,fileIsBigEndian);
 				short yDimension = readShort(data,fileIsBigEndian);
 				short zDimension = readShort(data,fileIsBigEndian);
-				dims[0] = xDimension;
-				dims[1] = yDimension;
-				dims[2] = zDimension;
+				if (numDimensions > 0)
+					dims[0] = xDimension;
+				if (numDimensions > 1)
+					dims[1] = yDimension;
+				if (numDimensions > 2)
+					dims[2] = zDimension;
 				for (int i = 3; i < numDimensions; i++) {
 					dims[i] = 1;
 				}
@@ -299,6 +302,9 @@ public class Ecat {
 					dims[1] = numAngles;
 				if (numDimensions > 2)
 					dims[2] = numZElements;
+				for (int i = 3; i < numDimensions; i++) {
+					dims[i] = 1;
+				}
 				ringDifference = readShort(data,fileIsBigEndian);
 				xResolution = readFloat(data,fileIsBigEndian);
 				yResolution = readFloat(data,fileIsBigEndian);
@@ -352,6 +358,9 @@ public class Ecat {
 					dims[1] = numAngles;
 				if (numDimensions > 2)
 					dims[2] = numZElements;
+				for (int i = 3; i < numDimensions; i++) {
+					dims[i] = 1;
+				}
 				ringDifference = readShort(data,fileIsBigEndian);
 				scaleFactor = readFloat(data,fileIsBigEndian);
 				float normMin = readFloat(data,fileIsBigEndian);

@@ -128,6 +128,17 @@ public class Ecat {
 				fillA[i] = readShort(data,fileIsBigEndian);
 			}
 			
+			// TODO read matrix list
+			
+			for (int f = 0; f < numFrames; f++) {
+				for (int p = 0; p < numPlanes; p++) {
+					for (int g = 0; g < numGates; g++) {
+						for (int b = 0; b < numBedPositions; b++) {
+							// TODO
+						}
+					}
+				}
+			}
 			long[] dims;
 			short dataType;
 			short numDimensions;
@@ -168,7 +179,6 @@ public class Ecat {
 				for (int i = 3; i < numDimensions; i++) {
 					dims[i] = 1;
 				}
-				// short correctionsApplied = readShort(data,fileIsBigEndian); // Removed TJB 20170223
 				ringDifference = readShort(data,fileIsBigEndian);
 				xResolution = readFloat(data,fileIsBigEndian);
 				yResolution = readFloat(data,fileIsBigEndian);
@@ -569,7 +579,7 @@ public class Ecat {
 
 		int sign = (bits >> 31) & 1;
 		int exponent = (bits >> 23) & 0xff;
-		int mantissa = (bits >> 0) & (2^23 - 1);
+		int mantissa = (bits >> 0) & ((1<<24) - 1);
 		
 		double value = (1.0 + (mantissa / Math.pow(2, 23))) * Math.pow(2, exponent - 129);
 

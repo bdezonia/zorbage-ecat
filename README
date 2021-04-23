@@ -25,3 +25,7 @@ How to include zorbage-ecat in a different build system
 All about the ecat file format:
   
   <TODO>
+
+  Note that the ecat file format is poorly documented. Some questions can only be
+  answered by referring to other source code libraries. As a result this code is
+  licensed LGPL to safely be distributable.

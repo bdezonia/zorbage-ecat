@@ -1,3 +1,20 @@
+/*
+  Copyright (C) 2021 Barry DeZonia
+
+  This library is free software; you can redistribute it and/or
+  modify it under the terms of the GNU Library General Public
+  License as published by the Free Software Foundation; either
+  version 2 of the License, or (at your option) any later version.
+
+  This library is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+  Library General Public License for more details.
+
+  You should have received a copy of the GNU Library General Public
+  License along with this library; if not, write to the Free Software
+  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
+ */
 package nom.bdezonia.zorbage.ecat;
 
 import java.io.BufferedInputStream;
@@ -20,6 +37,11 @@ import nom.bdezonia.zorbage.type.integer.int8.UnsignedInt8Member;
 import nom.bdezonia.zorbage.type.real.float32.Float32Member;
 import nom.bdezonia.zorbage.type.real.float64.Float64Member;
 
+/**
+ * 
+ * @author Barry DeZonia
+ *
+ */
 public class Ecat {
 	
 	// NOTE: so far headers are all from ecat 7. I can also make it support ecat 6 with more work.

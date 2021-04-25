@@ -42,6 +42,7 @@ import nom.bdezonia.zorbage.type.real.float64.Float64Member;
  * @author Barry DeZonia
  *
  */
+@SuppressWarnings({"rawtypes", "unused", "unchecked"})
 public class Ecat {
 	
 	// NOTE: so far headers are all from ecat 7. I can also make it support ecat 6 with more work.

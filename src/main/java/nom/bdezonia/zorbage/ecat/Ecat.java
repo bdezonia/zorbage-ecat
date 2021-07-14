@@ -570,6 +570,7 @@ public class Ecat {
 	private static double readVaxR4(DataInputStream str, boolean fileIsBigEndian) throws IOException {
 		int bits = str.readInt();
 		if (fileIsBigEndian) {
+			// TODO: also swap bytes within shorts?
 			//swap words
 			short lo = (short) ((bits >>  0) & 0xffff);
 			short hi = (short) ((bits >> 16) & 0xffff);
@@ -627,6 +628,6 @@ public class Ecat {
 	}
 	
 	public static void main(String[] args) {
-		DataBundle data = Ecat.load("/home/bdz/Desktop/099_S_2146_881_2be9_de11.v");
+		DataBundle data = Ecat.load("/home/bdz/images/ecat/099_S_2146_881_2be9_de11.v");
 	}
 }

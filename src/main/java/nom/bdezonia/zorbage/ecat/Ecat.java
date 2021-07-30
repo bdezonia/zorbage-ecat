@@ -18,10 +18,13 @@
 package nom.bdezonia.zorbage.ecat;
 
 import java.io.BufferedInputStream;
+import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.util.Arrays;
 
 import nom.bdezonia.zorbage.algebra.Allocatable;
 import nom.bdezonia.zorbage.algebra.G;
@@ -32,10 +35,33 @@ import nom.bdezonia.zorbage.misc.DataBundle;
 import nom.bdezonia.zorbage.sampling.IntegerIndex;
 import nom.bdezonia.zorbage.sampling.SamplingIterator;
 import nom.bdezonia.zorbage.type.integer.int16.SignedInt16Member;
+import nom.bdezonia.zorbage.type.integer.int16.UnsignedInt16Member;
 import nom.bdezonia.zorbage.type.integer.int32.SignedInt32Member;
+import nom.bdezonia.zorbage.type.integer.int32.UnsignedInt32Member;
+import nom.bdezonia.zorbage.type.integer.int64.SignedInt64Member;
+import nom.bdezonia.zorbage.type.integer.int64.UnsignedInt64Member;
+import nom.bdezonia.zorbage.type.integer.int8.SignedInt8Member;
 import nom.bdezonia.zorbage.type.integer.int8.UnsignedInt8Member;
 import nom.bdezonia.zorbage.type.real.float32.Float32Member;
 import nom.bdezonia.zorbage.type.real.float64.Float64Member;
+
+// Notes: it looks like an ecat file is:
+//   a main header that describes things including how many images follow
+//   an image header before each image that describes what kind of image follow
+//     image headers always start on 512 byte boundaries
+//   pixel data between image headers.
+// seems simple enough
+// questions
+//   what is the right read order for frames/planes/gates/bedpositions
+
+/*
+  algorithm outline:
+    read file header
+    num images = numframes * numPlanes (from header. but what about bedpos and gates?)
+    get width and height from the data headers
+    there is a way to get useful info from an image metadata structure (1 per frame?) 
+    
+*/
 
 /**
  * 
@@ -55,29 +81,41 @@ public class Ecat {
 		
 		BufferedInputStream bf1 = null;
 
+		CountingInputStream c1 = null;
+
 		DataInputStream data = null;
 				
 		boolean fileIsBigEndian = false;
+		
+		DataBundle images = new DataBundle();
 		
 		try {
 			f1 = new FileInputStream(file1);
 			
 			bf1 = new BufferedInputStream(f1);
 			
-			data = new DataInputStream(bf1);
+			c1 = new CountingInputStream(bf1);
+			
+			data = new DataInputStream(c1);
 
 			String magicNumber = readString(data, 14);
+			System.out.println(magicNumber);
 			String fname = readString(data, 32);
+			System.out.println(fname);
 			short swVersion = readShort(data, false);
 			short systemType = readShort(data, false);
 			short fileType = readShort(data, false);
 			// TODO: I may have read that the header is always big endian so this code might not work
 			if (fileType < 0 || fileType > 127) {
+				System.out.println("FILE IS BIG ENDIAN!!! SWAPPING WILL OCCUR!");
 				fileIsBigEndian = true;
 				swVersion = swapShort(swVersion);
 				systemType = swapShort(systemType);
 				fileType = swapShort(fileType);
 			}
+			System.out.println(swVersion);
+			System.out.println(systemType);
+			System.out.println(fileType);
 			String serialNumber = readString(data, 10);
 			int scanStartTime = readInt(data, fileIsBigEndian);
 			String isotopeName = readString(data, 8);
@@ -145,296 +183,351 @@ public class Ecat {
 			float dosage = readFloat(data, fileIsBigEndian);
 			float wellCounterCorrFactor = readFloat(data, fileIsBigEndian);
 			String dataUnits = readString(data, 32);
+			System.out.println("DATA UNITS: " + dataUnits);
 			short septaState = readShort(data, fileIsBigEndian);
 			short[] fillA = new short[6];
 			for (int i = 0; i < fillA.length; i++) {
 				fillA[i] = readShort(data, fileIsBigEndian);
 			}
 			
-			// TODO read matrix list
+			System.out.println("AFTEr hEADEr READ STREAM POS = "+c1.pos);
 			
+			long[] frameAddresses = new long[numFrames];
+			int[] matrixNumbers = new int[numFrames];
+			
+			for (int frame = 0; frame < numFrames; frame++) {
+
+				// Read in the directory node
+				byte[] dirNodes = new byte[512];
+				ByteArrayInputStream bs = new ByteArrayInputStream(dirNodes);
+				DataInputStream innerStr = new DataInputStream(bs);
+				int numUnused = readInt(innerStr, fileIsBigEndian);
+				int nextDirNodeAddress = readInt(innerStr, fileIsBigEndian);
+				int prevDirNodeAddress = readInt(innerStr, fileIsBigEndian);
+				int numUsed = readInt(innerStr, fileIsBigEndian);
+
+				int numAddresses = Math.min(31, numFrames-frame);
+				for (int i = 0; i < numAddresses; i++) {
+
+					int matrixNumber = readInt(innerStr, fileIsBigEndian);
+					int subheaderBlockNum = readInt(innerStr, fileIsBigEndian);
+					int lastBlock = readInt(innerStr, fileIsBigEndian);
+					int status = readInt(innerStr, fileIsBigEndian);
+	
+					frameAddresses[frame] = 512*(subheaderBlockNum-1);
+					matrixNumbers[frame] = matrixNumber;
+				}
+
+				// go to the next directory node
+				//System.out.println("NEXT BLK ADDRESS "+nextDirNodeAddress);
+				//if (nextDirNodeAddress > 0)
+				//	c1.goForwardTo(112 + 512L*(nextDirNodeAddress-1));
+				
+				//if (frame < numFrames)
+				//	c1.goForwardTo(512L*(nextDirNodeAddress-1));
+			}
+			
+			
+			
+			//for (int b = 0; b < numBedPositions; b++) {  
+			//	for (int g = 0; g < numGates; g++) {  // channel
+			//	}
+			//}
+			
+//			for (int f = 0; f < numFrames; f++) {  // z
+//				for (int p = 0; p < numPlanes; p++) {  // x and y
+//				// TODO
+//				}
+//			}
+
 			for (int f = 0; f < numFrames; f++) {
+				System.out.println("BEGIN READ FRAME "+f+" AND FILE POS = "+c1.pos);
 				for (int p = 0; p < numPlanes; p++) {
-					for (int g = 0; g < numGates; g++) {
-						for (int b = 0; b < numBedPositions; b++) {
-							// TODO
+					
+					long[] dims;
+					short dataType;
+					short numDimensions;
+					int frameDuration;
+					short numAngles;
+					float numAnglesF;  // spec says yes, this is a float
+					short numRElements;
+					float numRElementsF;  // spec says yes, this is a float
+					int frameStartTime;
+					int gateDuration;
+					int rWaveOffset;
+					int numAcceptedBeats;
+					short ringDifference;
+					short span;
+					short storageOrder;
+					float scaleFactor;
+					float xOffset, yOffset, zOffset;
+					float xResolution, yResolution, zResolution, wResolution;
+					short[] fillUser;
+					
+					switch (fileType) {
+					
+					case 3:  // attenuation data
+						
+						dataType = readShort(data, fileIsBigEndian);
+						numDimensions = readShort(data, fileIsBigEndian);
+						dims = new long[numDimensions];
+						short attenType = readShort(data, fileIsBigEndian); // Added TJB 20170223
+						numRElements = readShort(data, fileIsBigEndian);
+						numAngles = readShort(data, fileIsBigEndian);   
+						short numZElements = readShort(data, fileIsBigEndian);
+						if (numDimensions > 0)
+							dims[0] = numRElements;
+						if (numDimensions > 1)
+							dims[1] = numAngles;
+						if (numDimensions > 2)
+							dims[2] = numZElements;
+						for (int i = 3; i < numDimensions; i++) {
+							dims[i] = 1;
 						}
+						ringDifference = readShort(data, fileIsBigEndian);
+						xResolution = readFloat(data, fileIsBigEndian);
+						yResolution = readFloat(data, fileIsBigEndian);
+						zResolution = readFloat(data, fileIsBigEndian);
+						wResolution = readFloat(data, fileIsBigEndian);
+						scaleFactor = readFloat(data, fileIsBigEndian);
+						xOffset = readFloat(data, fileIsBigEndian);
+						yOffset = readFloat(data, fileIsBigEndian);
+						float xRadius = readFloat(data, fileIsBigEndian);
+						float yRadius = readFloat(data, fileIsBigEndian);
+						float tiltAngle = readFloat(data, fileIsBigEndian);
+						float attenuationCoeff = readFloat(data, fileIsBigEndian);
+						float attenuationMin = readFloat(data, fileIsBigEndian);
+						float attenuationMax = readFloat(data, fileIsBigEndian);
+						float skullThickness = readFloat(data, fileIsBigEndian);
+						short numAdditionalAttenCoeff = readShort(data, fileIsBigEndian);
+						float[] additionalAttenCoeff = new float[8];
+						for (int i = 0; i < additionalAttenCoeff.length; i++) {
+							additionalAttenCoeff[i] = readFloat(data, fileIsBigEndian);
+						}
+						float edgeFindingThreshold = readFloat(data, fileIsBigEndian);
+						storageOrder = readShort(data, fileIsBigEndian);
+						span = readShort(data, fileIsBigEndian);
+						short[] zElements = new short[64];
+						for (int i = 0; i < zElements.length; i++) {
+							zElements[i] = readShort(data, fileIsBigEndian);
+						}
+						short[] fillUnused = new short[86];
+						for (int i = 0; i < fillUnused.length; i++) {
+							fillUnused[i] = readShort(data, fileIsBigEndian);
+						}
+						fillUser = new short[50];
+						for (int i = 0; i < fillUser.length; i++) {
+							fillUser[i] = readShort(data, fileIsBigEndian);
+						}
+						break;
+						
+					case 7:  // image data
+					
+						dataType = readShort(data, fileIsBigEndian);
+						numDimensions = readShort(data, fileIsBigEndian);
+						dims = new long[numDimensions];
+						short xDimension = readShort(data, fileIsBigEndian);
+						short yDimension = readShort(data, fileIsBigEndian);
+						short zDimension = readShort(data, fileIsBigEndian);
+						if (numDimensions > 0)
+							dims[0] = xDimension;
+						if (numDimensions > 1)
+							dims[1] = yDimension;
+						if (numDimensions > 2)
+							dims[2] = zDimension;
+						for (int i = 3; i < numDimensions; i++) {
+							dims[i] = 1;
+						}
+						System.out.println("data type == " + dataType);
+						System.out.println("dims == " + Arrays.toString(dims));
+						xOffset = readFloat(data, fileIsBigEndian);
+						yOffset = readFloat(data, fileIsBigEndian);
+						zOffset = readFloat(data, fileIsBigEndian);
+						float reconZoom = readFloat(data, fileIsBigEndian);
+						scaleFactor = readFloat(data, fileIsBigEndian);
+						short imageMin = readShort(data, fileIsBigEndian);
+						short imageMax = readShort(data, fileIsBigEndian);
+						float xPixelSize = readFloat(data, fileIsBigEndian);
+						float yPixelSize = readFloat(data, fileIsBigEndian);
+						float zPixelSize = readFloat(data, fileIsBigEndian);
+						frameDuration = readInt(data, fileIsBigEndian);
+						frameStartTime = readInt(data, fileIsBigEndian);
+						short filterCode = readShort(data, fileIsBigEndian);
+						xResolution = readFloat(data, fileIsBigEndian);
+						yResolution = readFloat(data, fileIsBigEndian);
+						zResolution = readFloat(data, fileIsBigEndian);
+						numRElementsF = readFloat(data, fileIsBigEndian);
+						numAnglesF = readFloat(data, fileIsBigEndian);
+						float zRotationAngle = readFloat(data, fileIsBigEndian);
+						float decayCorrFctr = readFloat(data, fileIsBigEndian);
+						int processingCode = readInt(data, fileIsBigEndian);  // % see interpCodes(sh.processing_code) function below
+						gateDuration = readInt(data, fileIsBigEndian);
+						rWaveOffset = readInt(data, fileIsBigEndian);
+						numAcceptedBeats = readInt(data, fileIsBigEndian);
+						float filterCutoffFrequency = readFloat(data, fileIsBigEndian);
+						float filterResolution = readFloat(data, fileIsBigEndian);
+						float filterRampSlope = readFloat(data, fileIsBigEndian);
+						short filterOrder = readShort(data, fileIsBigEndian);
+						float filterScatterFraction = readFloat(data, fileIsBigEndian);
+						float filterScatterSlope = readFloat(data, fileIsBigEndian);
+						String annotation = readString(data, 40);
+						float m_1_1 = readFloat(data, fileIsBigEndian);
+						float m_1_2 = readFloat(data, fileIsBigEndian);
+						float m_1_3 = readFloat(data, fileIsBigEndian);
+						float m_2_1 = readFloat(data, fileIsBigEndian);
+						float m_2_2 = readFloat(data, fileIsBigEndian);
+						float m_2_3 = readFloat(data, fileIsBigEndian);
+						float m_3_1 = readFloat(data, fileIsBigEndian);
+						float m_3_2 = readFloat(data, fileIsBigEndian);
+						float m_3_3 = readFloat(data, fileIsBigEndian);
+						float rfilterCutoff = readFloat(data, fileIsBigEndian);
+						float rfilterResolution = readFloat(data, fileIsBigEndian);
+						short rfilterCode = readShort(data, fileIsBigEndian);
+						short rfilterOrder = readShort(data, fileIsBigEndian);
+						float zfilterCutoff = readFloat(data, fileIsBigEndian);
+						float zfilterResolution = readFloat(data, fileIsBigEndian);
+						short zfilterCode = readShort(data, fileIsBigEndian);
+						short zfilterOrder = readShort(data, fileIsBigEndian);
+						float m_1_4 = readFloat(data, fileIsBigEndian);
+						float m_2_4 = readFloat(data, fileIsBigEndian);
+						float m_3_4 = readFloat(data, fileIsBigEndian);
+						short scatterType = readShort(data, fileIsBigEndian);
+						short reconType = readShort(data, fileIsBigEndian);
+						short reconViews = readShort(data, fileIsBigEndian);
+						short[] fillCti = new short[87];
+						for (int i = 0; i < fillCti.length; i++) {
+							fillCti[i] = readShort(data, fileIsBigEndian);
+						}
+						fillUser = new short[49];
+						for (int i = 0; i < fillUser.length; i++) {
+							fillUser[i] = readShort(data, fileIsBigEndian);
+						}
+						break;
+					
+					case 11:  // 3d scan (sinogram) data file
+						
+						dataType = readShort(data, fileIsBigEndian);
+						numDimensions = readShort(data, fileIsBigEndian);
+						numRElements = readShort(data, fileIsBigEndian);
+						numAngles = readShort(data, fileIsBigEndian);
+						short correctionsApplied = readShort(data, fileIsBigEndian);
+						numZElements = readShort(data, fileIsBigEndian);
+						dims = new long[numDimensions];
+						if (numDimensions > 0)
+							dims[0] = numRElements;
+						if (numDimensions > 1)
+							dims[1] = numAngles;
+						if (numDimensions > 2)
+							dims[2] = numZElements;
+						for (int i = 3; i < numDimensions; i++) {
+							dims[i] = 1;
+						}
+						ringDifference = readShort(data, fileIsBigEndian);
+						xResolution = readFloat(data, fileIsBigEndian);
+						yResolution = readFloat(data, fileIsBigEndian);
+						zResolution = readFloat(data, fileIsBigEndian);
+						wResolution = readFloat(data, fileIsBigEndian);
+						short[] fill = new short[6];
+						for (int i = 0; i < fill.length; i++) {
+							fill[i] = readShort(data, fileIsBigEndian);
+						}
+						gateDuration = readInt(data, fileIsBigEndian); // TODO: make unsigned
+						rWaveOffset = readInt(data, fileIsBigEndian);
+						numAcceptedBeats = readInt(data, fileIsBigEndian);
+						scaleFactor = readFloat(data, fileIsBigEndian);
+						short scanMin = readShort(data, fileIsBigEndian);
+						short scanMax = readShort(data, fileIsBigEndian);
+						int prompts = readInt(data, fileIsBigEndian);
+						int delayed = readInt(data, fileIsBigEndian);
+						int multiples = readInt(data, fileIsBigEndian);
+						int netTrues = readInt(data, fileIsBigEndian);
+						float[] corSingles = new float[16];
+						for (int i = 0; i < corSingles.length; i++) {
+							corSingles[i] = readFloat(data, fileIsBigEndian);
+						}
+						float[] uncorSingles = new float[16];
+						for (int i = 0; i < uncorSingles.length; i++) {
+							uncorSingles[i] = readFloat(data, fileIsBigEndian);
+						}
+						float totAvgCor = readFloat(data, fileIsBigEndian);
+						float totAvgUncor = readFloat(data, fileIsBigEndian);
+						int totCoinRate = readInt(data, fileIsBigEndian);
+						frameStartTime = readInt(data, fileIsBigEndian);
+						frameDuration = readInt(data, fileIsBigEndian);
+						float lossCorrectionFactor = readFloat(data, fileIsBigEndian);
+						int[] physicalPlanes = new int[8];
+						for (int i = 0; i < physicalPlanes.length; i++) {
+							physicalPlanes[i] = readInt(data, fileIsBigEndian);
+						}
+						break;
+					
+					case 13:  // 3d normalization
+					
+						dataType = readShort(data, fileIsBigEndian);
+						numDimensions = readShort(data, fileIsBigEndian);
+						numRElements = readShort(data, fileIsBigEndian);
+						numAngles = readShort(data, fileIsBigEndian);
+						numZElements = readShort(data, fileIsBigEndian);
+						dims = new long[numDimensions];
+						if (numDimensions > 0)
+							dims[0] = numRElements;
+						if (numDimensions > 1)
+							dims[1] = numAngles;
+						if (numDimensions > 2)
+							dims[2] = numZElements;
+						for (int i = 3; i < numDimensions; i++) {
+							dims[i] = 1;
+						}
+						ringDifference = readShort(data, fileIsBigEndian);
+						scaleFactor = readFloat(data, fileIsBigEndian);
+						float normMin = readFloat(data, fileIsBigEndian);
+						float normMax = readFloat(data, fileIsBigEndian);
+						float fov_source_width = readFloat(data, fileIsBigEndian);
+						float norm_quality_factor = readFloat(data, fileIsBigEndian);
+						short norm_quality_factor_code = readShort(data, fileIsBigEndian);
+						storageOrder = readShort(data, fileIsBigEndian);
+						span = readShort(data, fileIsBigEndian);
+						zElements = new short[64];
+						for (int i = 0; i < zElements.length; i++) {
+							zElements[i] = readShort(data, fileIsBigEndian);
+						}
+						fillCti = new short[123];
+						for (int i = 0; i < fillCti.length; i++) {
+							fillCti[i] = readShort(data, fileIsBigEndian);
+						}
+						fillUser = new short[50];
+						for (int i = 0; i < fillUser.length; i++) {
+							fillUser[i] = readShort(data, fileIsBigEndian);
+						}
+						break;
+					
+					default:
+						// skip unknown header?
+						//c1.goForwardTo(desiredPos);
+						System.out.println("ECAT: unknown file type ("+fileType+") : no data was read!");
+						return new DataBundle();
+					}
+		
+					if (dataType > 0) {
+						
+						System.out.println("READING IMAGE DATA FrOM POS " + c1.pos);
+						
+						Allocatable type = value(dataType);
+						
+						DimensionedDataSource d = DimensionedStorage.allocate(type, dims);
+						
+						SamplingIterator<IntegerIndex> iter = GridIterator.compute(dims);
+						IntegerIndex idx = new IntegerIndex(dims.length);
+						while (iter.hasNext()) {
+							iter.next(idx);
+							readValue(data, dataType, fileIsBigEndian, type);
+							d.set(idx, type);
+						}
+						
+						merge(images, d, type);
 					}
 				}
 			}
-			long[] dims;
-			short dataType;
-			short numDimensions;
-			int frameDuration;
-			short numAngles;
-			float numAnglesF;  // TODO: view a spec: this looks wrong
-			short numRElements;
-			float numRElementsF;  // TODO: view a spec: this looks wrong
-			int frameStartTime;
-			int gateDuration;
-			int rWaveOffset;
-			int numAcceptedBeats;
-			short ringDifference;
-			short span;
-			short storageOrder;
-			float scaleFactor;
-			float xOffset, yOffset, zOffset;
-			float xResolution, yResolution, zResolution, wResolution;
-			short[] fillUser;
-			
-			switch (fileType) {
-			
-			case 3:  // attenuation data
-				
-				dataType = readShort(data, fileIsBigEndian);
-				numDimensions = readShort(data, fileIsBigEndian);
-				dims = new long[numDimensions];
-				short attenType = readShort(data, fileIsBigEndian); // Added TJB 20170223
-				numRElements = readShort(data, fileIsBigEndian);
-				numAngles = readShort(data, fileIsBigEndian);   
-				short numZElements = readShort(data, fileIsBigEndian);
-				if (numDimensions > 0)
-					dims[0] = numRElements;
-				if (numDimensions > 1)
-					dims[1] = numAngles;
-				if (numDimensions > 2)
-					dims[2] = numZElements;
-				for (int i = 3; i < numDimensions; i++) {
-					dims[i] = 1;
-				}
-				ringDifference = readShort(data, fileIsBigEndian);
-				xResolution = readFloat(data, fileIsBigEndian);
-				yResolution = readFloat(data, fileIsBigEndian);
-				zResolution = readFloat(data, fileIsBigEndian);
-				wResolution = readFloat(data, fileIsBigEndian);
-				scaleFactor = readFloat(data, fileIsBigEndian);
-				xOffset = readFloat(data, fileIsBigEndian);
-				yOffset = readFloat(data, fileIsBigEndian);
-				float xRadius = readFloat(data, fileIsBigEndian);
-				float yRadius = readFloat(data, fileIsBigEndian);
-				float tiltAngle = readFloat(data, fileIsBigEndian);
-				float attenuationCoeff = readFloat(data, fileIsBigEndian);
-				float attenuationMin = readFloat(data, fileIsBigEndian);
-				float attenuationMax = readFloat(data, fileIsBigEndian);
-				float skullThickness = readFloat(data, fileIsBigEndian);
-				short numAdditionalAttenCoeff = readShort(data, fileIsBigEndian);
-				float[] additionalAttenCoeff = new float[8];
-				for (int i = 0; i < additionalAttenCoeff.length; i++) {
-					additionalAttenCoeff[i] = readFloat(data, fileIsBigEndian);
-				}
-				float edgeFindingThreshold = readFloat(data, fileIsBigEndian);
-				storageOrder = readShort(data, fileIsBigEndian);
-				span = readShort(data, fileIsBigEndian);
-				short[] zElements = new short[64];
-				for (int i = 0; i < zElements.length; i++) {
-					zElements[i] = readShort(data, fileIsBigEndian);
-				}
-				short[] fillUnused = new short[86];
-				for (int i = 0; i < fillUnused.length; i++) {
-					fillUnused[i] = readShort(data, fileIsBigEndian);
-				}
-				fillUser = new short[50];
-				for (int i = 0; i < fillUser.length; i++) {
-					fillUser[i] = readShort(data, fileIsBigEndian);
-				}
-				break;
-				
-			case 7:  // image data
-			
-				dataType = readShort(data, fileIsBigEndian);
-				numDimensions = readShort(data, fileIsBigEndian);
-				dims = new long[numDimensions];
-				short xDimension = readShort(data, fileIsBigEndian);
-				short yDimension = readShort(data, fileIsBigEndian);
-				short zDimension = readShort(data, fileIsBigEndian);
-				if (numDimensions > 0)
-					dims[0] = xDimension;
-				if (numDimensions > 1)
-					dims[1] = yDimension;
-				if (numDimensions > 2)
-					dims[2] = zDimension;
-				for (int i = 3; i < numDimensions; i++) {
-					dims[i] = 1;
-				}
-				xOffset = readFloat(data, fileIsBigEndian);
-				yOffset = readFloat(data, fileIsBigEndian);
-				zOffset = readFloat(data, fileIsBigEndian);
-				float reconZoom = readFloat(data, fileIsBigEndian);
-				scaleFactor = readFloat(data, fileIsBigEndian);
-				short imageMin = readShort(data, fileIsBigEndian);
-				short imageMax = readShort(data, fileIsBigEndian);
-				float xPixelSize = readFloat(data, fileIsBigEndian);
-				float yPixelSize = readFloat(data, fileIsBigEndian);
-				float zPixelSize = readFloat(data, fileIsBigEndian);
-				frameDuration = readInt(data, fileIsBigEndian);
-				frameStartTime = readInt(data, fileIsBigEndian);
-				short filterCode = readShort(data, fileIsBigEndian);
-				xResolution = readFloat(data, fileIsBigEndian);
-				yResolution = readFloat(data, fileIsBigEndian);
-				zResolution = readFloat(data, fileIsBigEndian);
-				numRElementsF = readFloat(data, fileIsBigEndian);
-				numAnglesF = readFloat(data, fileIsBigEndian);
-				float zRotationAngle = readFloat(data, fileIsBigEndian);
-				float decayCorrFctr = readFloat(data, fileIsBigEndian);
-				int processingCode = readInt(data, fileIsBigEndian);  // % see interpCodes(sh.processing_code) function below
-				gateDuration = readInt(data, fileIsBigEndian);
-				rWaveOffset = readInt(data, fileIsBigEndian);
-				numAcceptedBeats = readInt(data, fileIsBigEndian);
-				float filterCutoffFrequency = readFloat(data, fileIsBigEndian);
-				float filterResolution = readFloat(data, fileIsBigEndian);
-				float filterRampSlope = readFloat(data, fileIsBigEndian);
-				short filterOrder = readShort(data, fileIsBigEndian);
-				float filterScatterFraction = readFloat(data, fileIsBigEndian);
-				float filterScatterSlope = readFloat(data, fileIsBigEndian);
-				String annotation = readString(data, 40);
-				float m_1_1 = readFloat(data, fileIsBigEndian);
-				float m_1_2 = readFloat(data, fileIsBigEndian);
-				float m_1_3 = readFloat(data, fileIsBigEndian);
-				float m_2_1 = readFloat(data, fileIsBigEndian);
-				float m_2_2 = readFloat(data, fileIsBigEndian);
-				float m_2_3 = readFloat(data, fileIsBigEndian);
-				float m_3_1 = readFloat(data, fileIsBigEndian);
-				float m_3_2 = readFloat(data, fileIsBigEndian);
-				float m_3_3 = readFloat(data, fileIsBigEndian);
-				float rfilterCutoff = readFloat(data, fileIsBigEndian);
-				float rfilterResolution = readFloat(data, fileIsBigEndian);
-				short rfilterCode = readShort(data, fileIsBigEndian);
-				short rfilterOrder = readShort(data, fileIsBigEndian);
-				float zfilterCutoff = readFloat(data, fileIsBigEndian);
-				float zfilterResolution = readFloat(data, fileIsBigEndian);
-				short zfilterCode = readShort(data, fileIsBigEndian);
-				short zfilterOrder = readShort(data, fileIsBigEndian);
-				float m_1_4 = readFloat(data, fileIsBigEndian);
-				float m_2_4 = readFloat(data, fileIsBigEndian);
-				float m_3_4 = readFloat(data, fileIsBigEndian);
-				short scatterType = readShort(data, fileIsBigEndian);
-				short reconType = readShort(data, fileIsBigEndian);
-				short reconViews = readShort(data, fileIsBigEndian);
-				short[] fillCti = new short[87];
-				for (int i = 0; i < fillCti.length; i++) {
-					fillCti[i] = readShort(data, fileIsBigEndian);
-				}
-				fillUser = new short[49];
-				for (int i = 0; i < fillUser.length; i++) {
-					fillUser[i] = readShort(data, fileIsBigEndian);
-				}
-				break;
-			
-			case 11:  // 3d scan (sinogram) data file
-				
-				dataType = readShort(data, fileIsBigEndian);
-				numDimensions = readShort(data, fileIsBigEndian);
-				numRElements = readShort(data, fileIsBigEndian);
-				numAngles = readShort(data, fileIsBigEndian);
-				short correctionsApplied = readShort(data, fileIsBigEndian);
-				numZElements = readShort(data, fileIsBigEndian);
-				dims = new long[numDimensions];
-				if (numDimensions > 0)
-					dims[0] = numRElements;
-				if (numDimensions > 1)
-					dims[1] = numAngles;
-				if (numDimensions > 2)
-					dims[2] = numZElements;
-				for (int i = 3; i < numDimensions; i++) {
-					dims[i] = 1;
-				}
-				ringDifference = readShort(data, fileIsBigEndian);
-				xResolution = readFloat(data, fileIsBigEndian);
-				yResolution = readFloat(data, fileIsBigEndian);
-				zResolution = readFloat(data, fileIsBigEndian);
-				wResolution = readFloat(data, fileIsBigEndian);
-				short[] fill = new short[6];
-				for (int i = 0; i < fill.length; i++) {
-					fill[i] = readShort(data, fileIsBigEndian);
-				}
-				gateDuration = readInt(data, fileIsBigEndian); // TODO: make unsigned
-				rWaveOffset = readInt(data, fileIsBigEndian);
-				numAcceptedBeats = readInt(data, fileIsBigEndian);
-				scaleFactor = readFloat(data, fileIsBigEndian);
-				short scanMin = readShort(data, fileIsBigEndian);
-				short scanMax = readShort(data, fileIsBigEndian);
-				int prompts = readInt(data, fileIsBigEndian);
-				int delayed = readInt(data, fileIsBigEndian);
-				int multiples = readInt(data, fileIsBigEndian);
-				int netTrues = readInt(data, fileIsBigEndian);
-				float[] corSingles = new float[16];
-				for (int i = 0; i < corSingles.length; i++) {
-					corSingles[i] = readFloat(data, fileIsBigEndian);
-				}
-				float[] uncorSingles = new float[16];
-				for (int i = 0; i < uncorSingles.length; i++) {
-					uncorSingles[i] = readFloat(data, fileIsBigEndian);
-				}
-				float totAvgCor = readFloat(data, fileIsBigEndian);
-				float totAvgUncor = readFloat(data, fileIsBigEndian);
-				int totCoinRate = readInt(data, fileIsBigEndian);
-				frameStartTime = readInt(data, fileIsBigEndian);
-				frameDuration = readInt(data, fileIsBigEndian);
-				float lossCorrectionFactor = readFloat(data, fileIsBigEndian);
-				int[] physicalPlanes = new int[8];
-				for (int i = 0; i < physicalPlanes.length; i++) {
-					physicalPlanes[i] = readInt(data, fileIsBigEndian);
-				}
-				break;
-			
-			case 13:  // 3d normalization
-			
-				dataType = readShort(data, fileIsBigEndian);
-				numDimensions = readShort(data, fileIsBigEndian);
-				numRElements = readShort(data, fileIsBigEndian);
-				numAngles = readShort(data, fileIsBigEndian);
-				numZElements = readShort(data, fileIsBigEndian);
-				dims = new long[numDimensions];
-				if (numDimensions > 0)
-					dims[0] = numRElements;
-				if (numDimensions > 1)
-					dims[1] = numAngles;
-				if (numDimensions > 2)
-					dims[2] = numZElements;
-				for (int i = 3; i < numDimensions; i++) {
-					dims[i] = 1;
-				}
-				ringDifference = readShort(data, fileIsBigEndian);
-				scaleFactor = readFloat(data, fileIsBigEndian);
-				float normMin = readFloat(data, fileIsBigEndian);
-				float normMax = readFloat(data, fileIsBigEndian);
-				float fov_source_width = readFloat(data, fileIsBigEndian);
-				float norm_quality_factor = readFloat(data, fileIsBigEndian);
-				short norm_quality_factor_code = readShort(data, fileIsBigEndian);
-				storageOrder = readShort(data, fileIsBigEndian);
-				span = readShort(data, fileIsBigEndian);
-				zElements = new short[64];
-				for (int i = 0; i < zElements.length; i++) {
-					zElements[i] = readShort(data, fileIsBigEndian);
-				}
-				fillCti = new short[123];
-				for (int i = 0; i < fillCti.length; i++) {
-					fillCti[i] = readShort(data, fileIsBigEndian);
-				}
-				fillUser = new short[50];
-				for (int i = 0; i < fillUser.length; i++) {
-					fillUser[i] = readShort(data, fileIsBigEndian);
-				}
-				break;
-			
-			default:
-			
-				System.out.println("ECAT: unknown file type ("+fileType+") : no data was read!");
-				return new DataBundle();
-			}
-			
-			Allocatable type = value(dataType);
-			
-			DimensionedDataSource d = DimensionedStorage.allocate(type, dims);
-			
-			SamplingIterator<IntegerIndex> iter = GridIterator.compute(dims);
-			IntegerIndex idx = new IntegerIndex(dims.length);
-			while (iter.hasNext()) {
-				iter.next(idx);
-				readValue(data, dataType, fileIsBigEndian, type);
-				d.set(idx, type);
-			}
-			
 		} catch (IOException e) {
 			try {
 				if (data != null)
@@ -448,9 +541,12 @@ public class Ecat {
 			}
 			System.out.println("Err 1: " + e);
 		}
-		return new DataBundle();
+		return images;
 	}
 
+	// TODO: there maybe be "signed number" flags in image headers that could
+	//   need me to hatch a different type. Fix when it is apparently possible.
+	
 	private static Allocatable value(short dataType) {
 		switch (dataType) {
 		case 1: // byte
@@ -472,6 +568,9 @@ public class Ecat {
 		}
 	}
 
+	// TODO: there maybe be "signed number" flags in image headers that could
+	//   need me to read different types. Fix when it is apparently possible.
+	
 	private static void readValue(DataInputStream d, short dataType, boolean fileIsBigEndian, Allocatable type) throws IOException {
 		byte tb;
 		short ts;
@@ -510,7 +609,46 @@ public class Ecat {
 		default:
 			throw new IllegalArgumentException("Unknown data type! "+dataType);
 		}
-
+	}
+	
+	// has more types than reader has used: simple room for expansion depending upon if there are
+	//   "signed data" flags in the image header. if so fix the 2 methods directly above this and
+	//   this method below will just work. Note: I might be able to ditch the 64 bit integer ones.
+	//   Those kinds may never be present in an ecat file.
+	
+	private static void merge(DataBundle dataSources, DimensionedDataSource<?> dataSource, Allocatable type) {
+		
+		if (type instanceof UnsignedInt8Member)
+			dataSources.mergeUInt8((DimensionedDataSource<UnsignedInt8Member>) dataSource);
+		
+		if (type instanceof SignedInt8Member)
+			dataSources.mergeInt8((DimensionedDataSource<SignedInt8Member>) dataSource);
+		
+		if (type instanceof UnsignedInt16Member)
+			dataSources.mergeUInt8((DimensionedDataSource<UnsignedInt8Member>) dataSource);
+		
+		if (type instanceof SignedInt16Member)
+			dataSources.mergeInt16((DimensionedDataSource<SignedInt16Member>) dataSource);
+		
+		if (type instanceof UnsignedInt32Member)
+			dataSources.mergeUInt32((DimensionedDataSource<UnsignedInt32Member>) dataSource);
+		
+		if (type instanceof SignedInt32Member)
+			dataSources.mergeInt32((DimensionedDataSource<SignedInt32Member>) dataSource);
+		
+		if (type instanceof UnsignedInt64Member)
+			dataSources.mergeUInt64((DimensionedDataSource<UnsignedInt64Member>) dataSource);
+		
+		if (type instanceof SignedInt64Member)
+			dataSources.mergeInt64((DimensionedDataSource<SignedInt64Member>) dataSource);
+		
+		if (type instanceof Float32Member)
+			dataSources.mergeFlt32((DimensionedDataSource<Float32Member>) dataSource);
+		
+		if (type instanceof Float64Member)
+			dataSources.mergeFlt64((DimensionedDataSource<Float64Member>) dataSource);
+		
+		// else no known type I can merge
 	}
 
 	private static byte readByte(DataInputStream str) throws IOException {
@@ -627,7 +765,92 @@ public class Ecat {
 		return (b0 << 24) | (b1 << 16) | (b2 << 8) | (b3 << 0);
 	}
 	
+	private static class CountingInputStream extends InputStream {
+		
+		private InputStream in;
+		private long pos;
+		
+		public CountingInputStream(InputStream in) {
+			
+			this.in = in;
+		}
+
+		@Override
+		public int read() throws IOException {
+			int byt = in.read();
+			if (byt >= 0)
+				pos++;
+			return byt;
+		}
+		
+		@Override
+		public int read(byte[] b) throws IOException {
+
+			int numBytesRead = in.read(b);
+			if (numBytesRead >= 0)
+				pos = pos + numBytesRead;
+			return numBytesRead;
+		}
+		
+		@Override
+		public int read(byte[] b, int off, int len) throws IOException {
+
+			int numBytesRead = in.read(b, off, len);
+			if (numBytesRead >= 0)
+				pos = pos + numBytesRead;
+			return numBytesRead;
+		}
+		
+		public void goForwardTo(long desiredPos) throws IOException {
+			System.out.println("Desired Pos " + desiredPos + "  Curr Pos " + pos);
+			long diff = desiredPos - pos;
+			if (diff >= 0) {
+				long numSkipped = in.skip(desiredPos - pos);
+				pos = pos + numSkipped;
+			}
+			else
+				throw new IllegalArgumentException("not yet supporting backward seeks");
+		}
+		
+		@Override
+		public int available() throws IOException {
+			return in.available();
+		}
+		
+		@Override
+		protected Object clone() throws CloneNotSupportedException {
+			throw new CloneNotSupportedException();
+		}
+		
+		@Override
+		public void close() throws IOException {
+			in.close();
+		}
+		
+		@Override
+		public synchronized void mark(int readlimit) {
+			in.mark(readlimit);
+		}
+		
+		@Override
+		public boolean markSupported() {
+			return in.markSupported();
+		}
+		@Override
+		public synchronized void reset() throws IOException {
+			in.reset();
+		}
+		
+		@Override
+		public long skip(long n) throws IOException {
+			long skipped = in.skip(n);
+			pos = pos + skipped;
+			return skipped;
+		}
+		
+	}
+	
 	public static void main(String[] args) {
-		DataBundle data = Ecat.load("/home/bdz/images/ecat/099_S_2146_881_2be9_de11.v");
+		DataBundle data = Ecat.load("/home/bdezonia/images/ecat/099_S_2146_881_2be9_de11.v");
 	}
 }

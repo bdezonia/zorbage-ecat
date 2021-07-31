@@ -194,12 +194,15 @@ public class Ecat {
 			
 			long[] frameAddresses = new long[numFrames];
 			int[] matrixNumbers = new int[numFrames];
+
+			// TODO: must figure out how the frame addresses are parsed.
 			
 			for (int frame = 0; frame < numFrames; frame++) {
 
 				// Read in the directory node
 				byte[] dirNode = new byte[512];
-				//data.read(dirNode);
+				// TODO commented thus out to make sure header byte positioning is right.
+				// data.read(dirNode);
 				ByteArrayInputStream bs = new ByteArrayInputStream(dirNode);
 				DataInputStream innerStr = new DataInputStream(bs);
 				int numUnused = readInt(innerStr, fileIsBigEndian);
@@ -237,17 +240,11 @@ public class Ecat {
 				System.out.println("  matrix number = " + matrixNumbers[i]);
 			}
 			
-			//for (int b = 0; b < numBedPositions; b++) {  
-			//	for (int g = 0; g < numGates; g++) {  // channel
-			//	}
-			//}
+			// TODO the third related TODO on the subject of header
+			// byte positioning. This is a hack that will work for
+			// a collection of a few images but when the number
+			// grows this will be incorrect.
 			
-//			for (int f = 0; f < numFrames; f++) {  // z
-//				for (int p = 0; p < numPlanes; p++) {  // x and y
-//				// TODO
-//				}
-//			}
-
 			c1.skip(512);
 			
 			for (int f = 0; f < numFrames; f++) {

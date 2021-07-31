@@ -29,6 +29,8 @@ import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
 
+import com.sun.org.apache.xerces.internal.impl.xpath.XPath.Axis;
+
 import nom.bdezonia.zorbage.algebra.Allocatable;
 import nom.bdezonia.zorbage.algebra.G;
 import nom.bdezonia.zorbage.algebra.HighPrecRepresentation;
@@ -259,11 +261,13 @@ public class Ecat {
 				CoordinateSpace coordSpace = null;
 				short dataType = -4000;
 				short xDimension = 0, yDimension = 0, zDimension = 0;
-
+				BigDecimal[] scales = new BigDecimal[0];
+				BigDecimal[] offsets = new BigDecimal[0];
+				String[] axisNames = new String[0];
 				IndexedDataSource<Allocatable> block = null;
 				
 				long[] dims = new long[0];
-				short numDimensions;
+				short numDimensions = 0;
 				int frameDuration;
 				short numAngles;
 				float numAnglesF;  // spec says yes, this is a float
@@ -428,6 +432,7 @@ public class Ecat {
 								m_2_1 != 0 || m_2_2 != 0 || m_2_3 != 0 || m_2_4 != 0 || 
 								m_3_1 != 0 || m_3_2 != 0 || m_3_3 != 0 || m_3_4 != 0)
 						{
+							System.out.println("AFFINE");
 							coordSpace =
 									new Affine3dCoordinateSpace(
 											BigDecimal.valueOf(m_1_1), 
@@ -444,23 +449,49 @@ public class Ecat {
 											BigDecimal.valueOf(m_3_4));
 						}
 						else {
-							BigDecimal[] scales = new BigDecimal[numDimensions];
-							BigDecimal[] offsets = new BigDecimal[numDimensions];
-							if (numDimensions > 0) {
-								scales[0] = BigDecimal.valueOf(xPixelSize);
-								offsets[0] = BigDecimal.valueOf(xOffset);
+							System.out.println("LINEAR");
+							
+							int numLegitDimensions = 0;
+							for (int i  = 0; i < numDimensions; i++) {
+								if (i == 0 && xDimension > 1) {
+									numLegitDimensions++;
+								}
+								if (i == 1 && yDimension > 1) {
+									numLegitDimensions++;
+								}
+								if (i == 2 && zDimension > 1) {
+									numLegitDimensions++;
+								}
+								if (i == 3) {
+									if (dims[i] > 1)
+										numLegitDimensions++;
+								}
 							}
-							if (numDimensions > 1) {
-								scales[1] = BigDecimal.valueOf(yPixelSize);
-								offsets[1] = BigDecimal.valueOf(yOffset);
-							}
-							if (numDimensions > 2) {
-								scales[2] = BigDecimal.valueOf(zPixelSize);
-								offsets[2] = BigDecimal.valueOf(zOffset);
-							}
-							for (int i = 3; i < scales.length; i++) {
-								scales[i] = BigDecimal.ONE;
-								offsets[i] = BigDecimal.ZERO;
+
+							scales = new BigDecimal[numLegitDimensions];
+							offsets = new BigDecimal[numLegitDimensions];
+							axisNames = new String[numLegitDimensions];
+
+							int counted = 0;
+							for (int i = 0; i < numDimensions; i++) {
+								if (i == 0 && xDimension > 1) {
+									scales[counted] = BigDecimal.valueOf(xPixelSize);
+									offsets[counted] = BigDecimal.valueOf(xOffset);
+									axisNames[counted] = "x";
+									counted++;
+								}
+								else if (i == 1 && yDimension > 1) {
+									scales[counted] = BigDecimal.valueOf(yPixelSize);
+									offsets[counted] = BigDecimal.valueOf(yOffset);
+									axisNames[counted] = "y";
+									counted++;
+								}
+								else if (i == 2 && zDimension > 1) {
+									scales[counted] = BigDecimal.valueOf(zPixelSize);
+									offsets[counted] = BigDecimal.valueOf(zOffset);
+									axisNames[counted] = "z";
+									counted++;
+								}
 							}
 							coordSpace = new LinearNdCoordinateSpace(scales, offsets);
 						}
@@ -641,9 +672,9 @@ public class Ecat {
 						ds.setName(filename);
 						ds.setSource(fname);
 						
-						ds.setAxisType(0, "x");
-						ds.setAxisType(1, "y");
-						ds.setAxisType(2, "z");
+						if (ds.numDimensions() > 0) ds.setAxisType(0, axisNames[0]);
+						if (ds.numDimensions() > 1) ds.setAxisType(1, axisNames[1]);
+						if (ds.numDimensions() > 2) ds.setAxisType(2, axisNames[2]);
 						
 						if (coordSpace != null) ds.setCoordinateSpace(coordSpace);
 						

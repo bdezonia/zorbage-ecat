@@ -36,6 +36,7 @@ import nom.bdezonia.zorbage.algebra.G;
 import nom.bdezonia.zorbage.algebra.HighPrecRepresentation;
 import nom.bdezonia.zorbage.algorithm.GridIterator;
 import nom.bdezonia.zorbage.algorithm.ScaleByDouble;
+import nom.bdezonia.zorbage.coordinates.Affine2dCoordinateSpace;
 import nom.bdezonia.zorbage.coordinates.Affine3dCoordinateSpace;
 import nom.bdezonia.zorbage.coordinates.CoordinateSpace;
 import nom.bdezonia.zorbage.coordinates.LinearNdCoordinateSpace;
@@ -428,12 +429,82 @@ public class Ecat {
 						block = Storage.allocate(value(dataType), 1L*xDimension*yDimension*numPlanes);
 					
 					if (coordSpace == null) {
+						
+						int numLegitDimensions = 0;
+						for (int i  = 0; i < numDimensions; i++) {
+							if (i == 0 && xDimension > 1) {
+								numLegitDimensions++;
+							}
+							if (i == 1 && yDimension > 1) {
+								numLegitDimensions++;
+							}
+							if (i == 2 && zDimension > 1) {
+								numLegitDimensions++;
+							}
+							if (i == 3) {
+								if (dims[i] > 1)
+									numLegitDimensions++;
+							}
+						}
+
 						if (m_1_1 != 0 || m_1_2 != 0 || m_1_3 != 0 || m_1_4 != 0 || 
 								m_2_1 != 0 || m_2_2 != 0 || m_2_3 != 0 || m_2_4 != 0 || 
 								m_3_1 != 0 || m_3_2 != 0 || m_3_3 != 0 || m_3_4 != 0)
 						{
-							System.out.println("AFFINE");
-							coordSpace =
+							if (numLegitDimensions == 2) {
+								float u1=0,u2=0,u3=0,v1=0,v2=0,v3=0;
+								if (numDimensions == 3) {
+									if (xDimension <= 1) {
+										u1 = m_2_2;
+										u2 = m_2_3;
+										u3 = m_2_4;
+										v1 = m_3_2;
+										v2 = m_3_3;
+										v3 = m_3_4;
+									}
+									else if (yDimension <= 1) {
+										u1 = m_1_1;
+										u2 = m_1_3;
+										u3 = m_1_4;
+										v1 = m_3_1;
+										v2 = m_3_3;
+										v3 = m_3_4;
+									}
+									else if (zDimension <= 1) {
+										u1 = m_1_1;
+										u2 = m_1_2;
+										u3 = m_1_4;
+										v1 = m_2_1;
+										v2 = m_2_2;
+										v3 = m_2_4;
+									}
+									else {
+										throw new IllegalArgumentException("unexpected num non trivial dimensions");
+									}
+									coordSpace =
+											new Affine2dCoordinateSpace(
+													BigDecimal.valueOf(u1), 
+													BigDecimal.valueOf(u2),
+													BigDecimal.valueOf(u3),
+													BigDecimal.valueOf(v1),
+													BigDecimal.valueOf(v2),
+													BigDecimal.valueOf(v3));
+									
+								}
+								else if (numDimensions == 2) {
+									coordSpace =
+											new Affine2dCoordinateSpace(
+													BigDecimal.valueOf(m_1_1), 
+													BigDecimal.valueOf(m_1_2),
+													BigDecimal.valueOf(m_1_4),
+													BigDecimal.valueOf(m_2_1),
+													BigDecimal.valueOf(m_2_2),
+													BigDecimal.valueOf(m_2_4));
+								}
+							}
+								
+							if (numLegitDimensions == 3)
+								coordSpace =
 									new Affine3dCoordinateSpace(
 											BigDecimal.valueOf(m_1_1), 
 											BigDecimal.valueOf(m_1_2),
@@ -449,24 +520,6 @@ public class Ecat {
 											BigDecimal.valueOf(m_3_4));
 						}
 						else {
-							System.out.println("LINEAR");
-							
-							int numLegitDimensions = 0;
-							for (int i  = 0; i < numDimensions; i++) {
-								if (i == 0 && xDimension > 1) {
-									numLegitDimensions++;
-								}
-								if (i == 1 && yDimension > 1) {
-									numLegitDimensions++;
-								}
-								if (i == 2 && zDimension > 1) {
-									numLegitDimensions++;
-								}
-								if (i == 3) {
-									if (dims[i] > 1)
-										numLegitDimensions++;
-								}
-							}
 
 							scales = new BigDecimal[numLegitDimensions];
 							offsets = new BigDecimal[numLegitDimensions];

@@ -51,8 +51,6 @@ import nom.bdezonia.zorbage.type.integer.int16.SignedInt16Member;
 import nom.bdezonia.zorbage.type.integer.int16.UnsignedInt16Member;
 import nom.bdezonia.zorbage.type.integer.int32.SignedInt32Member;
 import nom.bdezonia.zorbage.type.integer.int32.UnsignedInt32Member;
-import nom.bdezonia.zorbage.type.integer.int64.SignedInt64Member;
-import nom.bdezonia.zorbage.type.integer.int64.UnsignedInt64Member;
 import nom.bdezonia.zorbage.type.integer.int8.SignedInt8Member;
 import nom.bdezonia.zorbage.type.integer.int8.UnsignedInt8Member;
 import nom.bdezonia.zorbage.type.real.float32.Float32Member;
@@ -285,6 +283,7 @@ public class Ecat {
 				float xOffset, yOffset, zOffset;
 				float xResolution, yResolution, zResolution, wResolution;
 				short[] fillUser;
+				short imageMin = 0;
 				
 				switch (fileType) {
 				
@@ -367,7 +366,7 @@ public class Ecat {
 					zOffset = readFloat(data, fileIsBigEndian);
 					float reconZoom = readFloat(data, fileIsBigEndian);
 					scaleFactor = readFloat(data, fileIsBigEndian);
-					short imageMin = readShort(data, fileIsBigEndian);
+					imageMin = readShort(data, fileIsBigEndian);
 					short imageMax = readShort(data, fileIsBigEndian);
 					float xPixelSize = readFloat(data, fileIsBigEndian);
 					float yPixelSize = readFloat(data, fileIsBigEndian);
@@ -426,7 +425,7 @@ public class Ecat {
 					}
 
 					if (dataType != 0)
-						block = Storage.allocate(value(dataType), 1L*xDimension*yDimension*numPlanes);
+						block = Storage.allocate(value(dataType, imageMin), 1L*xDimension*yDimension*numPlanes);
 					
 					if (coordSpace == null) {
 						
@@ -659,10 +658,10 @@ public class Ecat {
 					
 					System.out.println("  READING IMAGE DATA FROM POS " + c1.pos);
 
-					Allocatable type = value(dataType);
+					Allocatable type = value(dataType, imageMin);
 					
 					for (long i = 0; i < block.size(); i++) {
-						readValue(data, dataType, fileIsBigEndian, type);
+						readValue(data, dataType, imageMin < 0, fileIsBigEndian, type);
 						block.set(i, type);
 					}
 
@@ -681,7 +680,7 @@ public class Ecat {
 				
 					for (int b = 0; b < blocks.size(); b++) {
 						
-						Allocatable type = value(dataType);
+						Allocatable type = value(dataType, imageMin);
 						
 						DimensionedDataSource<Allocatable> ds = DimensionedStorage.allocate(type, dims);
 						
@@ -756,22 +755,37 @@ public class Ecat {
 	// TODO: there maybe be "signed number" flags in image headers that could
 	//   need me to hatch a different type. Fix when it is apparently possible.
 	
-	private static Allocatable value(short dataType) {
+	private static Allocatable value(short dataType, short imageMin) {
 		switch (dataType) {
 		case 1: // byte
-			return G.UINT8.construct();
+			if (imageMin < 0)
+				return G.INT8.construct();
+			else
+				return G.UINT8.construct();
 		case 2: // short : VAX_I2 LITTLE
-			return G.INT16.construct();
+			if (imageMin < 0)
+				return G.INT16.construct();
+			else
+				return G.UINT16.construct();
 		case 3: // int : VAX_I4 LITTLE
-			return G.INT32.construct();
+			if (imageMin < 0)
+				return G.INT32.construct();
+			else
+				return G.UINT32.construct();
 		case 4: // double : VAX_R4 LITTLE
 			return G.DBL.construct();
 		case 5: // float : IEEE FLT
 			return G.FLT.construct();
 		case 6: // short : SUN_I2 BIG
-			return G.INT16.construct();
+			if (imageMin < 0)
+				return G.INT16.construct();
+			else
+				return G.UINT16.construct();
 		case 7: // int : SUN_I4 big
-			return G.INT32.construct();
+			if (imageMin < 0)
+				return G.INT32.construct();
+			else
+				return G.UINT32.construct();
 		default:
 			throw new IllegalArgumentException("Unknown data type! "+dataType);
 		}
@@ -780,7 +794,7 @@ public class Ecat {
 	// TODO: there maybe be "signed number" flags in image headers that could
 	//   need me to read different types. Fix when it is apparently possible.
 	
-	private static void readValue(DataInputStream d, short dataType, boolean fileIsBigEndian, Allocatable type) throws IOException {
+	private static void readValue(DataInputStream d, short dataType, boolean signed, boolean fileIsBigEndian, Allocatable type) throws IOException {
 		byte tb;
 		short ts;
 		int ti;
@@ -790,14 +804,23 @@ public class Ecat {
 		switch (dataType) {
 		case 1: // byte
 			tb = readByte(d);
-			((UnsignedInt8Member) type).setV(tb);
+			if (signed)
+				((SignedInt8Member) type).setV(tb);
+			else
+				((UnsignedInt8Member) type).setV(tb);
 		case 2: // short : VAX_I2 LITTLE
 			ts = readVaxI2(d, fileIsBigEndian);
-			((SignedInt16Member) type).setV(ts);
+			if (signed)
+				((SignedInt16Member) type).setV(ts);
+			else
+				((UnsignedInt16Member) type).setV(ts);
 			break;
 		case 3: // int : VAX_I4 LITTLE
 			ti = readVaxI4(d, fileIsBigEndian);
-			((SignedInt32Member) type).setV(ti);
+			if (signed)
+				((SignedInt32Member) type).setV(ti);
+			else
+				((UnsignedInt32Member) type).setV(ti);
 			break;
 		case 4: // double : VAX_R4 LITTLE
 			td = readVaxR4(d, fileIsBigEndian);
@@ -809,11 +832,17 @@ public class Ecat {
 			break;
 		case 6: // short : SUN_I2 BIG
 			ts = readSunI2(d, fileIsBigEndian);
-			((SignedInt16Member) type).setV(ts);
+			if (signed)
+				((SignedInt16Member) type).setV(ts);
+			else
+				((UnsignedInt16Member) type).setV(ts);
 			break;
 		case 7: // int : SUN_I4 big
 			ti = readSunI4(d, fileIsBigEndian);
-			((SignedInt32Member) type).setV(ti);
+			if (signed)
+				((SignedInt32Member) type).setV(ti);
+			else
+				((UnsignedInt32Member) type).setV(ti);
 			break;
 		default:
 			throw new IllegalArgumentException("Unknown data type! "+dataType);
@@ -822,8 +851,7 @@ public class Ecat {
 	
 	// has more types than reader has used: simple room for expansion depending upon if there are
 	//   "signed data" flags in the image header. if so fix the 2 methods directly above this and
-	//   this method below will just work. Note: I might be able to ditch the 64 bit integer ones.
-	//   Those kinds may never be present in an ecat file.
+	//   this method below will just work.
 	
 	private static void merge(DataBundle dataSources, DimensionedDataSource<?> dataSource, Allocatable type) {
 		
@@ -834,7 +862,7 @@ public class Ecat {
 			dataSources.mergeInt8((DimensionedDataSource<SignedInt8Member>) dataSource);
 		
 		if (type instanceof UnsignedInt16Member)
-			dataSources.mergeUInt8((DimensionedDataSource<UnsignedInt8Member>) dataSource);
+			dataSources.mergeUInt16((DimensionedDataSource<UnsignedInt16Member>) dataSource);
 		
 		if (type instanceof SignedInt16Member)
 			dataSources.mergeInt16((DimensionedDataSource<SignedInt16Member>) dataSource);
@@ -844,12 +872,6 @@ public class Ecat {
 		
 		if (type instanceof SignedInt32Member)
 			dataSources.mergeInt32((DimensionedDataSource<SignedInt32Member>) dataSource);
-		
-		if (type instanceof UnsignedInt64Member)
-			dataSources.mergeUInt64((DimensionedDataSource<UnsignedInt64Member>) dataSource);
-		
-		if (type instanceof SignedInt64Member)
-			dataSources.mergeInt64((DimensionedDataSource<SignedInt64Member>) dataSource);
 		
 		if (type instanceof Float32Member)
 			dataSources.mergeFlt32((DimensionedDataSource<Float32Member>) dataSource);

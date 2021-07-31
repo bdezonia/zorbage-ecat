@@ -29,8 +29,6 @@ import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
 
-import com.sun.org.apache.xerces.internal.impl.xpath.XPath.Axis;
-
 import nom.bdezonia.zorbage.algebra.Allocatable;
 import nom.bdezonia.zorbage.algebra.G;
 import nom.bdezonia.zorbage.algebra.HighPrecRepresentation;

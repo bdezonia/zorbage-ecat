@@ -31,7 +31,9 @@ import java.util.List;
 
 import nom.bdezonia.zorbage.algebra.Allocatable;
 import nom.bdezonia.zorbage.algebra.G;
+import nom.bdezonia.zorbage.algebra.HighPrecRepresentation;
 import nom.bdezonia.zorbage.algorithm.GridIterator;
+import nom.bdezonia.zorbage.algorithm.ScaleByDouble;
 import nom.bdezonia.zorbage.coordinates.Affine3dCoordinateSpace;
 import nom.bdezonia.zorbage.coordinates.CoordinateSpace;
 import nom.bdezonia.zorbage.coordinates.LinearNdCoordinateSpace;
@@ -52,6 +54,8 @@ import nom.bdezonia.zorbage.type.integer.int8.SignedInt8Member;
 import nom.bdezonia.zorbage.type.integer.int8.UnsignedInt8Member;
 import nom.bdezonia.zorbage.type.real.float32.Float32Member;
 import nom.bdezonia.zorbage.type.real.float64.Float64Member;
+import nom.bdezonia.zorbage.type.real.highprec.HighPrecisionMember;
+import nom.bdezonia.zorbage.type.universal.PrimitiveConverter;
 
 // Notes: it looks like an ecat file is:
 //   a main header that describes things including how many images follow
@@ -272,7 +276,7 @@ public class Ecat {
 				short ringDifference;
 				short span;
 				short storageOrder;
-				float scaleFactor;
+				float scaleFactor = 0;
 				float xOffset, yOffset, zOffset;
 				float xResolution, yResolution, zResolution, wResolution;
 				short[] fillUser;
@@ -592,6 +596,7 @@ public class Ecat {
 				if (dataType != 0) {
 				
 					for (int b = 0; b < blocks.size(); b++) {
+						
 						Allocatable type = value(dataType);
 						
 						DimensionedDataSource<Allocatable> ds = DimensionedStorage.allocate(type, dims);
@@ -602,7 +607,37 @@ public class Ecat {
 							block.get(u, type);
 							ds.rawData().set(u, type);
 						}
-		
+						
+						if (scaleFactor != 0 && scaleFactor != 1) {
+							if (type instanceof Float64Member) {
+								ScaleByDouble.compute(G.DBL, (double) scaleFactor,
+														(IndexedDataSource) ds.rawData(),
+														(IndexedDataSource) ds.rawData());
+							}
+							else if (type instanceof Float32Member) {
+								ScaleByDouble.compute(G.FLT, (double) scaleFactor,
+										(IndexedDataSource) ds.rawData(),
+										(IndexedDataSource) ds.rawData());
+							}
+							else {
+								DimensionedDataSource<Float32Member> newDs =
+										DimensionedStorage.allocate(G.FLT.construct(), dims);
+								HighPrecRepresentation tmp = (HighPrecRepresentation) type;
+								HighPrecisionMember hpVal = G.HP.construct();
+								Float32Member fltVal = G.FLT.construct();
+								Float32Member scale = G.FLT.construct(scaleFactor);
+								for (long i = 0; i < ds.rawData().size(); i++) {
+									ds.rawData().get(i, type);
+									tmp.toHighPrec(hpVal);
+									fltVal.fromHighPrec(hpVal);
+									G.FLT.multiply().call(fltVal, scale, fltVal);
+									newDs.rawData().set(i, fltVal);
+								}
+								ds = (DimensionedDataSource) newDs;
+								type = G.FLT.construct();
+							}
+						}
+						
 						ds.setName(filename);
 						ds.setSource(fname);
 						
@@ -613,7 +648,7 @@ public class Ecat {
 						if (coordSpace != null) ds.setCoordinateSpace(coordSpace);
 						
 						ds.setValueUnit(dataUnits);
-		
+						
 						merge(images, ds, type);
 					}
 				}

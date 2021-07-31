@@ -752,9 +752,6 @@ public class Ecat {
 		return images;
 	}
 
-	// TODO: there maybe be "signed number" flags in image headers that could
-	//   need me to hatch a different type. Fix when it is apparently possible.
-	
 	private static Allocatable value(short dataType, short imageMin) {
 		switch (dataType) {
 		case 1: // byte
@@ -791,9 +788,6 @@ public class Ecat {
 		}
 	}
 
-	// TODO: there maybe be "signed number" flags in image headers that could
-	//   need me to read different types. Fix when it is apparently possible.
-	
 	private static void readValue(DataInputStream d, short dataType, boolean signed, boolean fileIsBigEndian, Allocatable type) throws IOException {
 		byte tb;
 		short ts;
@@ -848,10 +842,6 @@ public class Ecat {
 			throw new IllegalArgumentException("Unknown data type! "+dataType);
 		}
 	}
-	
-	// has more types than reader has used: simple room for expansion depending upon if there are
-	//   "signed data" flags in the image header. if so fix the 2 methods directly above this and
-	//   this method below will just work.
 	
 	private static void merge(DataBundle dataSources, DimensionedDataSource<?> dataSource, Allocatable type) {
 		

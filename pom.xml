@@ -2,7 +2,7 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>io.github.bdezonia</groupId>
   <artifactId>zorbage-ecat</artifactId>
-  <version>0.0.1</version>
+  <version>0.0.2-SNAPSHOT</version>
   <name>zorbage-ecat</name>
   <description>zorbage-ecat: code for reading ecat data files into zorbage structures for further processing</description>
   <url>https://github.com/bdezonia/zorbage-ecat</url>
@@ -10,7 +10,7 @@
 
   <licenses>
     <license>
-      <name>LGPLv2.1 clause</name>
+      <name>LGPL-2.1-or-later</name>
       <distribution>repo</distribution>
     </license>
   </licenses>

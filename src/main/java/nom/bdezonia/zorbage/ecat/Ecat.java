@@ -221,14 +221,14 @@ public class Ecat {
 
 				System.out.println("BEGIN READ FRAME "+f+" AND FILE POS = "+c1.pos);
 				
-				List<IndexedDataSource<Allocatable>> blocks = new LinkedList<>();
+				List<IndexedDataSource<Allocatable>> threeDChunks = new LinkedList<>();
 				CoordinateSpace coordSpace = null;
 				short dataType = -4000;
 				short xDimension = 0, yDimension = 0, zDimension = 0;
 				BigDecimal[] scales = new BigDecimal[0];
 				BigDecimal[] offsets = new BigDecimal[0];
 				String[] axisNames = new String[0];
-				IndexedDataSource<Allocatable> block = null;
+				IndexedDataSource<Allocatable> frameData = null;
 				
 				long[] dims = new long[0];
 				short numDimensions = 0;
@@ -390,7 +390,7 @@ public class Ecat {
 					}
 
 					if (dataType != 0)
-						block = Storage.allocate(value(dataType, imageMin), 1L*xDimension*yDimension*numPlanes);
+						frameData = Storage.allocate(value(dataType, imageMin), 1L*xDimension*yDimension*numPlanes);
 					
 					if (coordSpace == null) {
 						
@@ -619,19 +619,19 @@ public class Ecat {
 					System.out.println("ECAT: unknown file type ("+fileType+") : no data was read!");
 				}
 		
-				if (dataType > 0 && block != null) {
+				if (dataType > 0 && frameData != null) {
 					
 					System.out.println("  READING IMAGE DATA FROM POS " + c1.pos);
 
 					Allocatable type = value(dataType, imageMin);
 					
-					long blockSize = block.size();
-					for (long i = 0; i < blockSize; i++) {
+					long numElements = frameData.size();
+					for (long i = 0; i < numElements; i++) {
 						readValue(data, dataType, imageMin < 0, fileIsBigEndian, type);
-						block.set(i, type);
+						frameData.set(i, type);
 					}
 
-					blocks.add(block);
+					threeDChunks.add(frameData);
 
 					System.out.println("  FINISHED READING PLANE AND POS IS " + c1.pos);
 
@@ -640,53 +640,75 @@ public class Ecat {
 					}
 				}
 				
-				dims = numPlanes > 1 ? new long[] {xDimension, yDimension, numPlanes} : new long[] {xDimension, yDimension};
+				dims = numPlanes > 1 ?
+						new long[] {xDimension, yDimension, numPlanes}
+						:
+						new long[] {xDimension, yDimension};
 
 				if (dataType != 0) {
 				
-					int numBlocks = blocks.size();
-					for (int b = 0; b < numBlocks; b++) {
+					int numChunks = threeDChunks.size();
+					for (int chnk = 0; chnk < numChunks; chnk++) {
 						
 						Allocatable type = value(dataType, imageMin);
 						
-						DimensionedDataSource<Allocatable> ds = DimensionedStorage.allocate(type, dims);
+						DimensionedDataSource<Allocatable> ds =
+								DimensionedStorage.allocate(type, dims);
 						
-						block = blocks.get(b);
-						long blockSize = block.size();
-						for (long u = 0; u < blockSize; u++) {
-							block.get(u, type);
+						frameData = threeDChunks.get(chnk);
+						long numElements = frameData.size();
+						for (long u = 0; u < numElements; u++) {
+							frameData.get(u, type);
 							ds.rawData().set(u, type);
 						}
 						
+						// does the header have a scale factor associated with it?
+						
 						if (scaleFactor != 0 && scaleFactor != 1) {
+						
+							// apply scale factor
+							
 							if (type instanceof Float64Member) {
+								
+								// a double data set can be scaled just fine
+								
 								ScaleByDouble.compute(G.DBL, (double) scaleFactor,
 														(IndexedDataSource) ds.rawData(),
 														(IndexedDataSource) ds.rawData());
 							}
 							else if (type instanceof Float32Member) {
+
+								// a float data set can be scaled just fine
+								
 								ScaleByDouble.compute(G.FLT, (double) scaleFactor,
 										(IndexedDataSource) ds.rawData(),
 										(IndexedDataSource) ds.rawData());
 							}
 							else {
-								DimensionedDataSource<Float32Member> newDs =
-										DimensionedStorage.allocate(G.FLT.construct(), dims);
+								
+								// an integer based data set cannot be scaled without some
+								//   data loss so transform it into a float data set (because
+								//   our scale factor is a float).
+
+								Allocatable floatType = G.FLT.construct();
+										
+								DimensionedDataSource<Float32Member> floatDs =
+										DimensionedStorage.allocate(floatType, dims);
 								HighPrecRepresentation valAsHP = (HighPrecRepresentation) type;
 								HighPrecisionMember hpVal = G.HP.construct();
 								HighPrecisionMember scale = G.HP.construct(scaleFactor);
 								Float32Member fltVal = G.FLT.construct();
 								IndexedDataSource<Allocatable> rawData = ds.rawData();
-								long numElements = rawData.size();
-								for (long i = 0; i < numElements; i++) {
+								long numElems = rawData.size();
+								for (long i = 0; i < numElems; i++) {
 									rawData.get(i, type);
 									valAsHP.toHighPrec(hpVal);
 									G.HP.multiply().call(hpVal, scale, hpVal);
 									fltVal.fromHighPrec(hpVal);
-									newDs.rawData().set(i, fltVal);
+									floatDs.rawData().set(i, fltVal);
 								}
-								ds = (DimensionedDataSource) newDs;
-								type = G.FLT.construct();
+								ds = (DimensionedDataSource) floatDs;
+								type = floatType;
 							}
 						}
 						

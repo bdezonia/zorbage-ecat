@@ -389,26 +389,12 @@ public class Ecat {
 						fillUser[i] = readShort(data, fileIsBigEndian);
 					}
 
-					if (dataType != 0)
-						frameData = Storage.allocate(value(dataType, imageMin), 1L*xDimension*yDimension*numPlanes);
-					
 					if (coordSpace == null) {
 						
 						int numLegitDimensions = 0;
 						for (int i  = 0; i < numDimensions; i++) {
-							if (i == 0 && xDimension > 1) {
+							if (dims[i] > 1)
 								numLegitDimensions++;
-							}
-							if (i == 1 && yDimension > 1) {
-								numLegitDimensions++;
-							}
-							if (i == 2 && zDimension > 1) {
-								numLegitDimensions++;
-							}
-							if (i == 3) {
-								if (dims[i] > 1)
-									numLegitDimensions++;
-							}
 						}
 
 						if (m_1_1 != 0 || m_1_2 != 0 || m_1_3 != 0 || m_1_4 != 0 || 
@@ -507,6 +493,12 @@ public class Ecat {
 									scales[counted] = BigDecimal.valueOf(zPixelSize);
 									offsets[counted] = BigDecimal.valueOf(zOffset);
 									axisNames[counted] = "z";
+									counted++;
+								}
+								else if (i >= 3 && dims.length >= 3 && dims[i] > 1) {
+									scales[counted] = BigDecimal.ONE;
+									offsets[counted] = BigDecimal.ZERO;
+									axisNames[counted] = "unknown";
 									counted++;
 								}
 							}
@@ -619,9 +611,11 @@ public class Ecat {
 					System.out.println("ECAT: unknown file type ("+fileType+") : no data was read!");
 				}
 		
-				if (dataType > 0 && frameData != null) {
+				if (dataType > 0) {
 					
 					System.out.println("  READING IMAGE DATA FROM POS " + c1.pos);
+
+					frameData = Storage.allocate(value(dataType, imageMin), 1L*dims[0]*dims[1]*numPlanes);
 
 					Allocatable type = value(dataType, imageMin);
 					
@@ -641,9 +635,9 @@ public class Ecat {
 				}
 				
 				dims = numPlanes > 1 ?
-						new long[] {xDimension, yDimension, numPlanes}
+						new long[] {dims[0], dims[1], numPlanes}
 						:
-						new long[] {xDimension, yDimension};
+						new long[] {dims[0], dims[1]};
 
 				if (dataType != 0) {
 				

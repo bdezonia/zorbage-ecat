@@ -56,24 +56,6 @@ import nom.bdezonia.zorbage.type.real.float64.Float64Member;
 import nom.bdezonia.zorbage.type.real.highprec.HighPrecisionMember;
 import nom.bdezonia.zorbage.type.universal.PrimitiveConverter;
 
-// Notes: it looks like an ecat file is:
-//   a main header that describes things including how many images follow
-//   an image header before each image that describes what kind of image follow
-//     image headers always start on 512 byte boundaries
-//   pixel data between image headers.
-// seems simple enough
-// questions
-//   what is the right read order for frames/planes/gates/bed positions
-
-/*
-  algorithm outline:
-    read file header
-    num images = numframes * numPlanes (from header. but what about bedpos and gates?)
-    get width and height from the data headers
-    there is a way to get useful info from an image metadata structure (1 per frame?) 
-    
-*/
-
 /**
  * 
  * @author Barry DeZonia
@@ -92,7 +74,7 @@ public class Ecat {
 		
 		BufferedInputStream bf1 = null;
 
-		CountingInputStream c1 = null;
+		PositionableInputStream c1 = null;
 
 		DataInputStream data = null;
 				
@@ -105,7 +87,7 @@ public class Ecat {
 			
 			bf1 = new BufferedInputStream(f1);
 			
-			c1 = new CountingInputStream(bf1);
+			c1 = new PositionableInputStream(bf1);
 			
 			data = new DataInputStream(c1);
 
@@ -114,7 +96,7 @@ public class Ecat {
 			short swVersion = readShort(data, false);
 			short systemType = readShort(data, false);
 			short fileType = readShort(data, false);
-			// TODO: I may have read that the header is always big endian so this code might not work
+
 			if (fileType < 0 || fileType > 127) {
 				System.out.println("FILE IS BIG ENDIAN!!! SWAPPING WILL OCCUR!");
 				fileIsBigEndian = true;
@@ -198,57 +180,46 @@ public class Ecat {
 			long[] frameAddresses = new long[numFrames];
 			int[] matrixNumbers = new int[numFrames];
 
-			// TODO: must figure out how the frame addresses are parsed.
-			
+			// The buffer we will read the directory node bytes into
+
+			byte[] dirNode = new byte[512];
+
 			for (int frame = 0; frame < numFrames; frame++) {
 
-				// Read in the directory node
-				byte[] dirNode = new byte[512];
-				// TODO commented thus out to make sure header byte positioning is right.
-				// data.read(dirNode);
-				ByteArrayInputStream bs = new ByteArrayInputStream(dirNode);
-				DataInputStream innerStr = new DataInputStream(bs);
-				int numUnused = readInt(innerStr, fileIsBigEndian);
-				int nextDirNodeAddress = readInt(innerStr, fileIsBigEndian);
-				int prevDirNodeAddress = readInt(innerStr, fileIsBigEndian);
-				int numUsed = readInt(innerStr, fileIsBigEndian);
+				int bucket = frame % 31;
+				
+				if (bucket == 0) {
+					data.read(dirNode);
+					ByteArrayInputStream bs = new ByteArrayInputStream(dirNode);
+					DataInputStream innerStr = new DataInputStream(bs);
+					int numUnused = readInt(innerStr, fileIsBigEndian);
+					int nextDirNodeAddress = readInt(innerStr, fileIsBigEndian);
+					int prevDirNodeAddress = readInt(innerStr, fileIsBigEndian);
+					int numUsed = readInt(innerStr, fileIsBigEndian);
+					for (int i = 0; i < 31; i++) {
 
-				int numAddresses = Math.min(31, numFrames-frame);
-				for (int i = 0; i < numAddresses; i++) {
-
-					int matrixNumber = readInt(innerStr, fileIsBigEndian);
-					int subheaderBlockNum = readInt(innerStr, fileIsBigEndian);
-					int lastBlock = readInt(innerStr, fileIsBigEndian);
-					int status = readInt(innerStr, fileIsBigEndian);
-	
-					frameAddresses[frame] = 512*(subheaderBlockNum-1);
-					matrixNumbers[frame] = matrixNumber;
+						// some of these will be bogus: we always iterate 31 though
+						// this maybe be more than the num frames we need.
+						
+						int matrixNumber = readInt(innerStr, fileIsBigEndian);
+						int subheaderBlockNum = readInt(innerStr, fileIsBigEndian);
+						int lastBlock = readInt(innerStr, fileIsBigEndian);
+						int status = readInt(innerStr, fileIsBigEndian);
+		
+						// now record the frame address etc. for valid frames only
+						
+						if (i < numFrames) {
+							frameAddresses[frame+i] = 512*(subheaderBlockNum-1);
+							matrixNumbers[frame+i] = matrixNumber;
+						}
+					}
 				}
-
-				// go to the next directory node
-				//System.out.print(nextDirNodeAddress);
-				//if (nextDirNodeAddress > 0)
-				//	c1.goForwardTo(512L*(nextDirNodeAddress-1));
-				
-				//if (frame < numFrames)
-				//	c1.goForwardTo(512L*(nextDirNodeAddress-1));
-				
-				//if (c1.pos % 512 > 0) {
-				//	c1.skip(512 - (c1.pos % 512));
-				//}
 			}
 			
-			for (int i = 0; i < frameAddresses.length; i++) {
-				System.out.println("frame " + i + " address = " + frameAddresses[i]);
-				System.out.println("  matrix number = " + matrixNumbers[i]);
-			}
-			
-			// TODO the third related TODO on the subject of header
-			// byte positioning. This is a hack that will work for
-			// a collection of a few images but when the number
-			// grows this will be incorrect.
-			
-			c1.skip(512);
+//			for (int i = 0; i < frameAddresses.length; i++) {
+//				System.out.println("frame " + i + " address = " + frameAddresses[i]);
+//				System.out.println("  matrix number = " + matrixNumbers[i]);
+//			}
 			
 			for (int f = 0; f < numFrames; f++) {
 
@@ -703,15 +674,17 @@ public class Ecat {
 							else {
 								DimensionedDataSource<Float32Member> newDs =
 										DimensionedStorage.allocate(G.FLT.construct(), dims);
-								HighPrecRepresentation tmp = (HighPrecRepresentation) type;
+								HighPrecRepresentation valAsHP = (HighPrecRepresentation) type;
 								HighPrecisionMember hpVal = G.HP.construct();
+								HighPrecisionMember scale = G.HP.construct(scaleFactor);
 								Float32Member fltVal = G.FLT.construct();
-								Float32Member scale = G.FLT.construct(scaleFactor);
-								for (long i = 0; i < ds.rawData().size(); i++) {
-									ds.rawData().get(i, type);
-									tmp.toHighPrec(hpVal);
+								IndexedDataSource<Allocatable> rawData = ds.rawData();
+								long size = rawData.size();
+								for (long i = 0; i < size; i++) {
+									rawData.get(i, type);
+									valAsHP.toHighPrec(hpVal);
+									G.HP.multiply().call(hpVal, scale, hpVal);
 									fltVal.fromHighPrec(hpVal);
-									G.FLT.multiply().call(fltVal, scale, fltVal);
 									newDs.rawData().set(i, fltVal);
 								}
 								ds = (DimensionedDataSource) newDs;
@@ -846,28 +819,31 @@ public class Ecat {
 		if (type instanceof UnsignedInt8Member)
 			dataSources.mergeUInt8((DimensionedDataSource<UnsignedInt8Member>) dataSource);
 		
-		if (type instanceof SignedInt8Member)
+		else if (type instanceof SignedInt8Member)
 			dataSources.mergeInt8((DimensionedDataSource<SignedInt8Member>) dataSource);
 		
-		if (type instanceof UnsignedInt16Member)
+		else if (type instanceof UnsignedInt16Member)
 			dataSources.mergeUInt16((DimensionedDataSource<UnsignedInt16Member>) dataSource);
 		
-		if (type instanceof SignedInt16Member)
+		else if (type instanceof SignedInt16Member)
 			dataSources.mergeInt16((DimensionedDataSource<SignedInt16Member>) dataSource);
 		
-		if (type instanceof UnsignedInt32Member)
+		else if (type instanceof UnsignedInt32Member)
 			dataSources.mergeUInt32((DimensionedDataSource<UnsignedInt32Member>) dataSource);
 		
-		if (type instanceof SignedInt32Member)
+		else if (type instanceof SignedInt32Member)
 			dataSources.mergeInt32((DimensionedDataSource<SignedInt32Member>) dataSource);
 		
-		if (type instanceof Float32Member)
+		else if (type instanceof Float32Member)
 			dataSources.mergeFlt32((DimensionedDataSource<Float32Member>) dataSource);
 		
-		if (type instanceof Float64Member)
+		else if (type instanceof Float64Member)
 			dataSources.mergeFlt64((DimensionedDataSource<Float64Member>) dataSource);
 		
 		// else no known type I can merge
+		
+		else
+			throw new IllegalArgumentException("Unknown data type: "+type.getClass().getName());
 	}
 
 	private static byte readByte(DataInputStream str) throws IOException {
@@ -922,7 +898,7 @@ public class Ecat {
 		return v;
 	}
 
-	// NOTE: to preserve the full accuracy of the vax float returning it as a double
+	// NOTE: to preserve the full accuracy of the vax float I am returning it as a double
 	
 	private static double readVaxR4(DataInputStream str, boolean fileIsBigEndian) throws IOException {
 		int bits = str.readInt();
@@ -984,12 +960,12 @@ public class Ecat {
 		return (b0 << 24) | (b1 << 16) | (b2 << 8) | (b3 << 0);
 	}
 	
-	private static class CountingInputStream extends InputStream {
+	private static class PositionableInputStream extends InputStream {
 		
 		private InputStream in;
 		private long pos;
 		
-		public CountingInputStream(InputStream in) {
+		public PositionableInputStream(InputStream in) {
 			
 			this.in = in;
 		}
@@ -1048,12 +1024,12 @@ public class Ecat {
 		
 		@Override
 		public synchronized void mark(int readlimit) {
-			in.mark(readlimit);
+			throw new UnsupportedOperationException();
 		}
 		
 		@Override
 		public boolean markSupported() {
-			return in.markSupported();
+			return false;
 		}
 		@Override
 		public synchronized void reset() throws IOException {

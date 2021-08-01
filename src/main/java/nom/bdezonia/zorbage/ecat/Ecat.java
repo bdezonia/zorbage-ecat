@@ -32,7 +32,6 @@ import java.util.List;
 import nom.bdezonia.zorbage.algebra.Allocatable;
 import nom.bdezonia.zorbage.algebra.G;
 import nom.bdezonia.zorbage.algebra.HighPrecRepresentation;
-import nom.bdezonia.zorbage.algorithm.GridIterator;
 import nom.bdezonia.zorbage.algorithm.ScaleByDouble;
 import nom.bdezonia.zorbage.coordinates.Affine2dCoordinateSpace;
 import nom.bdezonia.zorbage.coordinates.Affine3dCoordinateSpace;
@@ -42,8 +41,6 @@ import nom.bdezonia.zorbage.data.DimensionedDataSource;
 import nom.bdezonia.zorbage.data.DimensionedStorage;
 import nom.bdezonia.zorbage.datasource.IndexedDataSource;
 import nom.bdezonia.zorbage.misc.DataBundle;
-import nom.bdezonia.zorbage.sampling.IntegerIndex;
-import nom.bdezonia.zorbage.sampling.SamplingIterator;
 import nom.bdezonia.zorbage.storage.Storage;
 import nom.bdezonia.zorbage.type.integer.int16.SignedInt16Member;
 import nom.bdezonia.zorbage.type.integer.int16.UnsignedInt16Member;
@@ -54,7 +51,6 @@ import nom.bdezonia.zorbage.type.integer.int8.UnsignedInt8Member;
 import nom.bdezonia.zorbage.type.real.float32.Float32Member;
 import nom.bdezonia.zorbage.type.real.float64.Float64Member;
 import nom.bdezonia.zorbage.type.real.highprec.HighPrecisionMember;
-import nom.bdezonia.zorbage.type.universal.PrimitiveConverter;
 
 /**
  * 
@@ -225,7 +221,7 @@ public class Ecat {
 
 				System.out.println("BEGIN READ FRAME "+f+" AND FILE POS = "+c1.pos);
 				
-				List<IndexedDataSource> blocks = new LinkedList<>();
+				List<IndexedDataSource<Allocatable>> blocks = new LinkedList<>();
 				CoordinateSpace coordSpace = null;
 				short dataType = -4000;
 				short xDimension = 0, yDimension = 0, zDimension = 0;
@@ -629,7 +625,8 @@ public class Ecat {
 
 					Allocatable type = value(dataType, imageMin);
 					
-					for (long i = 0; i < block.size(); i++) {
+					long blockSize = block.size();
+					for (long i = 0; i < blockSize; i++) {
 						readValue(data, dataType, imageMin < 0, fileIsBigEndian, type);
 						block.set(i, type);
 					}
@@ -647,15 +644,16 @@ public class Ecat {
 
 				if (dataType != 0) {
 				
-					for (int b = 0; b < blocks.size(); b++) {
+					int numBlocks = blocks.size();
+					for (int b = 0; b < numBlocks; b++) {
 						
 						Allocatable type = value(dataType, imageMin);
 						
 						DimensionedDataSource<Allocatable> ds = DimensionedStorage.allocate(type, dims);
 						
 						block = blocks.get(b);
-						long sz = block.size();
-						for (long u = 0; u < sz; u++) {
+						long blockSize = block.size();
+						for (long u = 0; u < blockSize; u++) {
 							block.get(u, type);
 							ds.rawData().set(u, type);
 						}
@@ -679,8 +677,8 @@ public class Ecat {
 								HighPrecisionMember scale = G.HP.construct(scaleFactor);
 								Float32Member fltVal = G.FLT.construct();
 								IndexedDataSource<Allocatable> rawData = ds.rawData();
-								long size = rawData.size();
-								for (long i = 0; i < size; i++) {
+								long numElements = rawData.size();
+								for (long i = 0; i < numElements; i++) {
 									rawData.get(i, type);
 									valAsHP.toHighPrec(hpVal);
 									G.HP.multiply().call(hpVal, scale, hpVal);

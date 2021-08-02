@@ -250,7 +250,7 @@ public class Ecat {
 				float xOffset, yOffset, zOffset;
 				float xResolution, yResolution, zResolution, wResolution;
 				short[] fillUser;
-				short imageMin = 0;
+				boolean signedDataFlag = false;
 				
 				double rUnit=0, thetaUnit=0, zUnit=0;
 				
@@ -288,6 +288,7 @@ public class Ecat {
 					float attenuationCoeff = readFloat(data, fileIsBigEndian);
 					float attenuationMin = readFloat(data, fileIsBigEndian);
 					float attenuationMax = readFloat(data, fileIsBigEndian);
+					signedDataFlag = attenuationMin < 0;
 					float skullThickness = readFloat(data, fileIsBigEndian);
 					short numAdditionalAttenCoeff = readShort(data, fileIsBigEndian);
 					float[] additionalAttenCoeff = new float[8];
@@ -358,7 +359,8 @@ public class Ecat {
 					zOffset = readFloat(data, fileIsBigEndian);
 					float reconZoom = readFloat(data, fileIsBigEndian);
 					scaleFactor = readFloat(data, fileIsBigEndian);
-					imageMin = readShort(data, fileIsBigEndian);
+					short imageMin = readShort(data, fileIsBigEndian);
+					signedDataFlag = imageMin < 0;
 					short imageMax = readShort(data, fileIsBigEndian);
 					float xPixelSize = readFloat(data, fileIsBigEndian);
 					float yPixelSize = readFloat(data, fileIsBigEndian);
@@ -568,6 +570,7 @@ public class Ecat {
 					scaleFactor = readFloat(data, fileIsBigEndian);
 					short scanMin = readShort(data, fileIsBigEndian);
 					short scanMax = readShort(data, fileIsBigEndian);
+					signedDataFlag = scanMin < 0;
 					int prompts = readInt(data, fileIsBigEndian);
 					int delayed = readInt(data, fileIsBigEndian);
 					int multiples = readInt(data, fileIsBigEndian);
@@ -636,6 +639,7 @@ public class Ecat {
 					scaleFactor = readFloat(data, fileIsBigEndian);
 					float normMin = readFloat(data, fileIsBigEndian);
 					float normMax = readFloat(data, fileIsBigEndian);
+					signedDataFlag = normMin < 0;
 					float fov_source_width = readFloat(data, fileIsBigEndian);
 					float norm_quality_factor = readFloat(data, fileIsBigEndian);
 					short norm_quality_factor_code = readShort(data, fileIsBigEndian);
@@ -688,13 +692,13 @@ public class Ecat {
 					
 					System.out.println("  READING IMAGE DATA FROM POS " + c1.pos);
 
-					frameData = Storage.allocate(value(dataType, imageMin), 1L*dims[0]*dims[1]*numPlanes);
-
-					Allocatable type = value(dataType, imageMin);
+					Allocatable type = value(dataType, signedDataFlag);
 					
+					frameData = Storage.allocate(type, 1L*dims[0]*dims[1]*numPlanes);
+
 					long numElements = frameData.size();
 					for (long i = 0; i < numElements; i++) {
-						readValue(data, dataType, imageMin < 0, fileIsBigEndian, type);
+						readValue(data, dataType, signedDataFlag, fileIsBigEndian, type);
 						frameData.set(i, type);
 					}
 
@@ -717,7 +721,7 @@ public class Ecat {
 					int numChunks = threeDChunks.size();
 					for (int chnk = 0; chnk < numChunks; chnk++) {
 						
-						Allocatable type = value(dataType, imageMin);
+						Allocatable type = value(dataType, signedDataFlag);
 						
 						DimensionedDataSource<Allocatable> ds =
 								DimensionedStorage.allocate(type, dims);
@@ -810,20 +814,20 @@ public class Ecat {
 		return images;
 	}
 
-	private static Allocatable value(short dataType, short imageMin) {
+	private static Allocatable value(short dataType, boolean signedData) {
 		switch (dataType) {
 		case 1: // byte
-			if (imageMin < 0)
+			if (signedData)
 				return G.INT8.construct();
 			else
 				return G.UINT8.construct();
 		case 2: // short : VAX_I2 LITTLE
-			if (imageMin < 0)
+			if (signedData)
 				return G.INT16.construct();
 			else
 				return G.UINT16.construct();
 		case 3: // int : VAX_I4 LITTLE
-			if (imageMin < 0)
+			if (signedData)
 				return G.INT32.construct();
 			else
 				return G.UINT32.construct();
@@ -832,12 +836,12 @@ public class Ecat {
 		case 5: // float : IEEE FLT
 			return G.FLT.construct();
 		case 6: // short : SUN_I2 BIG
-			if (imageMin < 0)
+			if (signedData)
 				return G.INT16.construct();
 			else
 				return G.UINT16.construct();
 		case 7: // int : SUN_I4 big
-			if (imageMin < 0)
+			if (signedData)
 				return G.INT32.construct();
 			else
 				return G.UINT32.construct();

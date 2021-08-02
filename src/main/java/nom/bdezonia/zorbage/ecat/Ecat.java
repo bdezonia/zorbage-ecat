@@ -36,7 +36,9 @@ import nom.bdezonia.zorbage.algorithm.ScaleByDouble;
 import nom.bdezonia.zorbage.coordinates.Affine2dCoordinateSpace;
 import nom.bdezonia.zorbage.coordinates.Affine3dCoordinateSpace;
 import nom.bdezonia.zorbage.coordinates.CoordinateSpace;
+import nom.bdezonia.zorbage.coordinates.Cylindrical3dCoordinateSpace;
 import nom.bdezonia.zorbage.coordinates.LinearNdCoordinateSpace;
+import nom.bdezonia.zorbage.coordinates.Polar2dCoordinateSpace;
 import nom.bdezonia.zorbage.data.DimensionedDataSource;
 import nom.bdezonia.zorbage.data.DimensionedStorage;
 import nom.bdezonia.zorbage.datasource.IndexedDataSource;
@@ -250,6 +252,8 @@ public class Ecat {
 				short[] fillUser;
 				short imageMin = 0;
 				
+				double rUnit=0, thetaUnit=0, zUnit=0;
+				
 				switch (fileType) {
 				
 				case 3:  // attenuation data
@@ -304,6 +308,29 @@ public class Ecat {
 					fillUser = new short[50];
 					for (int i = 0; i < fillUser.length; i++) {
 						fillUser[i] = readShort(data, fileIsBigEndian);
+					}
+					rUnit = xResolution;
+					thetaUnit = yResolution;
+					zUnit = zResolution;
+					if (numZElements > 1) {
+						coordSpace = new Cylindrical3dCoordinateSpace(
+								BigDecimal.valueOf(rUnit),
+								BigDecimal.valueOf(thetaUnit),
+								BigDecimal.valueOf(zUnit)
+								);
+						axisNames = new String[3];
+						axisNames[0] = "r";
+						axisNames[1] = "theta";
+						axisNames[2] = "z";
+					}
+					else {
+						coordSpace = new Polar2dCoordinateSpace(
+								BigDecimal.valueOf(rUnit),
+								BigDecimal.valueOf(thetaUnit)
+								);
+						axisNames = new String[2];
+						axisNames[0] = "r";
+						axisNames[1] = "theta";
 					}
 					break;
 					
@@ -563,6 +590,29 @@ public class Ecat {
 					for (int i = 0; i < physicalPlanes.length; i++) {
 						physicalPlanes[i] = readInt(data, fileIsBigEndian);
 					}
+					rUnit = xResolution;
+					thetaUnit = yResolution;
+					zUnit = zResolution;
+					if (numZElements > 1) {
+						coordSpace = new Cylindrical3dCoordinateSpace(
+								BigDecimal.valueOf(rUnit),
+								BigDecimal.valueOf(thetaUnit),
+								BigDecimal.valueOf(zUnit)
+								);
+						axisNames = new String[3];
+						axisNames[0] = "r";
+						axisNames[1] = "theta";
+						axisNames[2] = "z";
+					}
+					else {
+						coordSpace = new Polar2dCoordinateSpace(
+								BigDecimal.valueOf(rUnit),
+								BigDecimal.valueOf(thetaUnit)
+								);
+						axisNames = new String[2];
+						axisNames[0] = "r";
+						axisNames[1] = "theta";
+					}
 					break;
 				
 				case 13:  // 3d normalization
@@ -602,6 +652,29 @@ public class Ecat {
 					fillUser = new short[50];
 					for (int i = 0; i < fillUser.length; i++) {
 						fillUser[i] = readShort(data, fileIsBigEndian);
+					}
+					rUnit = 1.0;  // TODO do this better
+					thetaUnit = Math.PI * 2 / numAngles;
+					zUnit =  1.0;  // TODO do this better
+					if (numZElements > 1) {
+						coordSpace = new Cylindrical3dCoordinateSpace(
+								BigDecimal.valueOf(rUnit),
+								BigDecimal.valueOf(thetaUnit),
+								BigDecimal.valueOf(zUnit)
+								);
+						axisNames = new String[3];
+						axisNames[0] = "r";
+						axisNames[1] = "theta";
+						axisNames[2] = "z";
+					}
+					else {
+						coordSpace = new Polar2dCoordinateSpace(
+								BigDecimal.valueOf(rUnit),
+								BigDecimal.valueOf(thetaUnit)
+								);
+						axisNames = new String[2];
+						axisNames[0] = "r";
+						axisNames[1] = "theta";
 					}
 					break;
 				

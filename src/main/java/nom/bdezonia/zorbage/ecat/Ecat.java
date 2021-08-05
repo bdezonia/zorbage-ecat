@@ -141,6 +141,10 @@ public class Ecat {
 			short numFrames = readShort(data, fileIsBigEndian);
 			short numGates = readShort(data, fileIsBigEndian);
 			short numBedPositions = readShort(data, fileIsBigEndian);
+			System.out.println("planes   = " + numPlanes);
+			System.out.println("frames   = " + numFrames);
+			System.out.println("gates    = " + numGates);
+			System.out.println("bedposes = " + numBedPositions);
 			float bedPosition0 = readFloat(data, fileIsBigEndian);
 			float bedPosition1 = readFloat(data, fileIsBigEndian);
 			float bedPosition2 = readFloat(data, fileIsBigEndian);
@@ -182,619 +186,623 @@ public class Ecat {
 
 			byte[] dirNode = new byte[512];
 
-			for (int frame = 0; frame < numFrames; frame++) {
-
-				int bucket = frame % 31;
-				
-				if (bucket == 0) {
-					data.read(dirNode);
-					ByteArrayInputStream bs = new ByteArrayInputStream(dirNode);
-					DataInputStream innerStr = new DataInputStream(bs);
-					int numUnused = readInt(innerStr, fileIsBigEndian);
-					int nextDirNodeAddress = readInt(innerStr, fileIsBigEndian);
-					int prevDirNodeAddress = readInt(innerStr, fileIsBigEndian);
-					int numUsed = readInt(innerStr, fileIsBigEndian);
-					for (int i = 0; i < 31; i++) {
-
-						// some of these will be bogus: we always iterate 31 though
-						// this maybe be more than the num frames we need.
-						
-						int matrixNumber = readInt(innerStr, fileIsBigEndian);
-						int subheaderBlockNum = readInt(innerStr, fileIsBigEndian);
-						int lastBlock = readInt(innerStr, fileIsBigEndian);
-						int status = readInt(innerStr, fileIsBigEndian);
+			for (int bedpos = 0; bedpos < Math.max(1, numBedPositions); bedpos++) {
+				for (int gate = 0; gate < Math.max(1, numGates); gate++) {
+					for (int frame = 0; frame < numFrames; frame++) {
 		
-						// now record the frame address etc. for valid frames only
+						int bucket = frame % 31;
 						
-						if (i < numFrames) {
-							frameAddresses[frame+i] = 512*(subheaderBlockNum-1);
-							matrixNumbers[frame+i] = matrixNumber;
-						}
-					}
-				}
-			}
-			
-//			for (int i = 0; i < frameAddresses.length; i++) {
-//				System.out.println("frame " + i + " address = " + frameAddresses[i]);
-//				System.out.println("  matrix number = " + matrixNumbers[i]);
-//			}
-			
-			for (int f = 0; f < numFrames; f++) {
-
-				System.out.println("BEGIN READ FRAME "+f+" AND FILE POS = "+c1.pos);
+						if (bucket == 0) {
+							data.read(dirNode);
+							ByteArrayInputStream bs = new ByteArrayInputStream(dirNode);
+							DataInputStream innerStr = new DataInputStream(bs);
+							int numUnused = readInt(innerStr, fileIsBigEndian);
+							int nextDirNodeAddress = readInt(innerStr, fileIsBigEndian);
+							int prevDirNodeAddress = readInt(innerStr, fileIsBigEndian);
+							int numUsed = readInt(innerStr, fileIsBigEndian);
+							for (int i = 0; i < 31; i++) {
+		
+								// some of these will be bogus: we always iterate 31 though
+								// this maybe be more than the num frames we need.
+								
+								int matrixNumber = readInt(innerStr, fileIsBigEndian);
+								int subheaderBlockNum = readInt(innerStr, fileIsBigEndian);
+								int lastBlock = readInt(innerStr, fileIsBigEndian);
+								int status = readInt(innerStr, fileIsBigEndian);
 				
-				List<IndexedDataSource<Allocatable>> threeDChunks = new LinkedList<>();
-				CoordinateSpace coordSpace = null;
-				short dataType = -4000;
-				short xDimension = 0, yDimension = 0, zDimension = 0;
-				BigDecimal[] scales = new BigDecimal[0];
-				BigDecimal[] offsets = new BigDecimal[0];
-				String[] axisNames = new String[0];
-				IndexedDataSource<Allocatable> frameData = null;
-				
-				long[] dims = new long[0];
-				short numDimensions = 0;
-				int frameDuration;
-				short numAngles;
-				float numAnglesF;  // spec says yes, this is a float
-				short numRElements;
-				float numRElementsF;  // spec says yes, this is a float
-				int frameStartTime;
-				int gateDuration;
-				int rWaveOffset;
-				int numAcceptedBeats;
-				short ringDifference;
-				short span;
-				short storageOrder;
-				float scaleFactor = 0;
-				float xOffset, yOffset, zOffset;
-				float xResolution, yResolution, zResolution, wResolution;
-				short[] fillUser;
-				boolean signedDataFlag = false;
-				
-				double rUnit=0, thetaUnit=0, zUnit=0;
-				
-				switch (fileType) {
-				
-				case 3:  // attenuation data
-					
-					dataType = readShort(data, fileIsBigEndian);
-					numDimensions = readShort(data, fileIsBigEndian);
-					dims = new long[numDimensions];
-					short attenType = readShort(data, fileIsBigEndian); // Added TJB 20170223
-					numRElements = readShort(data, fileIsBigEndian);
-					numAngles = readShort(data, fileIsBigEndian);   
-					short numZElements = readShort(data, fileIsBigEndian);
-					if (numDimensions > 0)
-						dims[0] = numRElements;
-					if (numDimensions > 1)
-						dims[1] = numAngles;
-					if (numDimensions > 2)
-						dims[2] = numZElements;
-					for (int i = 3; i < numDimensions; i++) {
-						dims[i] = 1;
-					}
-					ringDifference = readShort(data, fileIsBigEndian);
-					xResolution = readFloat(data, fileIsBigEndian);
-					yResolution = readFloat(data, fileIsBigEndian);
-					zResolution = readFloat(data, fileIsBigEndian);
-					wResolution = readFloat(data, fileIsBigEndian);
-					scaleFactor = readFloat(data, fileIsBigEndian);
-					xOffset = readFloat(data, fileIsBigEndian);
-					yOffset = readFloat(data, fileIsBigEndian);
-					float xRadius = readFloat(data, fileIsBigEndian);
-					float yRadius = readFloat(data, fileIsBigEndian);
-					float tiltAngle = readFloat(data, fileIsBigEndian);
-					float attenuationCoeff = readFloat(data, fileIsBigEndian);
-					float attenuationMin = readFloat(data, fileIsBigEndian);
-					float attenuationMax = readFloat(data, fileIsBigEndian);
-					signedDataFlag = attenuationMin < 0;
-					float skullThickness = readFloat(data, fileIsBigEndian);
-					short numAdditionalAttenCoeff = readShort(data, fileIsBigEndian);
-					float[] additionalAttenCoeff = new float[8];
-					for (int i = 0; i < additionalAttenCoeff.length; i++) {
-						additionalAttenCoeff[i] = readFloat(data, fileIsBigEndian);
-					}
-					float edgeFindingThreshold = readFloat(data, fileIsBigEndian);
-					storageOrder = readShort(data, fileIsBigEndian);
-					span = readShort(data, fileIsBigEndian);
-					short[] zElements = new short[64];
-					for (int i = 0; i < zElements.length; i++) {
-						zElements[i] = readShort(data, fileIsBigEndian);
-					}
-					short[] fillUnused = new short[86];
-					for (int i = 0; i < fillUnused.length; i++) {
-						fillUnused[i] = readShort(data, fileIsBigEndian);
-					}
-					fillUser = new short[50];
-					for (int i = 0; i < fillUser.length; i++) {
-						fillUser[i] = readShort(data, fileIsBigEndian);
-					}
-					rUnit = xResolution;
-					thetaUnit = yResolution;
-					zUnit = zResolution;
-					if (numZElements > 1) {
-						coordSpace = new Cylindrical3dCoordinateSpace(
-								BigDecimal.valueOf(rUnit),
-								BigDecimal.valueOf(thetaUnit),
-								BigDecimal.valueOf(zUnit)
-								);
-						axisNames = new String[3];
-						axisNames[0] = "r";
-						axisNames[1] = "theta";
-						axisNames[2] = "z";
-					}
-					else {
-						coordSpace = new Polar2dCoordinateSpace(
-								BigDecimal.valueOf(rUnit),
-								BigDecimal.valueOf(thetaUnit)
-								);
-						axisNames = new String[2];
-						axisNames[0] = "r";
-						axisNames[1] = "theta";
-					}
-					break;
-					
-				case 7:  // image data
-				
-					dataType = readShort(data, fileIsBigEndian);
-					numDimensions = readShort(data, fileIsBigEndian);
-					dims = new long[numDimensions];
-					xDimension = readShort(data, fileIsBigEndian);
-					yDimension = readShort(data, fileIsBigEndian);
-					zDimension = readShort(data, fileIsBigEndian);
-					if (numDimensions > 0)
-						dims[0] = xDimension;
-					if (numDimensions > 1)
-						dims[1] = yDimension;
-					if (numDimensions > 2)
-						dims[2] = zDimension;
-					for (int i = 3; i < numDimensions; i++) {
-						dims[i] = 1;
-					}
-					System.out.println("data type == " + dataType);
-					System.out.println("dims == " + Arrays.toString(dims));
-					xOffset = readFloat(data, fileIsBigEndian);
-					yOffset = readFloat(data, fileIsBigEndian);
-					zOffset = readFloat(data, fileIsBigEndian);
-					float reconZoom = readFloat(data, fileIsBigEndian);
-					scaleFactor = readFloat(data, fileIsBigEndian);
-					short imageMin = readShort(data, fileIsBigEndian);
-					signedDataFlag = imageMin < 0;
-					short imageMax = readShort(data, fileIsBigEndian);
-					float xPixelSize = readFloat(data, fileIsBigEndian);
-					float yPixelSize = readFloat(data, fileIsBigEndian);
-					float zPixelSize = readFloat(data, fileIsBigEndian);
-					frameDuration = readInt(data, fileIsBigEndian);
-					frameStartTime = readInt(data, fileIsBigEndian);
-					short filterCode = readShort(data, fileIsBigEndian);
-					xResolution = readFloat(data, fileIsBigEndian);
-					yResolution = readFloat(data, fileIsBigEndian);
-					zResolution = readFloat(data, fileIsBigEndian);
-					numRElementsF = readFloat(data, fileIsBigEndian);
-					numAnglesF = readFloat(data, fileIsBigEndian);
-					float zRotationAngle = readFloat(data, fileIsBigEndian);
-					float decayCorrFctr = readFloat(data, fileIsBigEndian);
-					int processingCode = readInt(data, fileIsBigEndian);  // % see interpCodes(sh.processing_code) function below
-					gateDuration = readInt(data, fileIsBigEndian);
-					rWaveOffset = readInt(data, fileIsBigEndian);
-					numAcceptedBeats = readInt(data, fileIsBigEndian);
-					float filterCutoffFrequency = readFloat(data, fileIsBigEndian);
-					float filterResolution = readFloat(data, fileIsBigEndian);
-					float filterRampSlope = readFloat(data, fileIsBigEndian);
-					short filterOrder = readShort(data, fileIsBigEndian);
-					float filterScatterFraction = readFloat(data, fileIsBigEndian);
-					float filterScatterSlope = readFloat(data, fileIsBigEndian);
-					String annotation = readString(data, 40);
-					float m_1_1 = readFloat(data, fileIsBigEndian);
-					float m_1_2 = readFloat(data, fileIsBigEndian);
-					float m_1_3 = readFloat(data, fileIsBigEndian);
-					float m_2_1 = readFloat(data, fileIsBigEndian);
-					float m_2_2 = readFloat(data, fileIsBigEndian);
-					float m_2_3 = readFloat(data, fileIsBigEndian);
-					float m_3_1 = readFloat(data, fileIsBigEndian);
-					float m_3_2 = readFloat(data, fileIsBigEndian);
-					float m_3_3 = readFloat(data, fileIsBigEndian);
-					float rfilterCutoff = readFloat(data, fileIsBigEndian);
-					float rfilterResolution = readFloat(data, fileIsBigEndian);
-					short rfilterCode = readShort(data, fileIsBigEndian);
-					short rfilterOrder = readShort(data, fileIsBigEndian);
-					float zfilterCutoff = readFloat(data, fileIsBigEndian);
-					float zfilterResolution = readFloat(data, fileIsBigEndian);
-					short zfilterCode = readShort(data, fileIsBigEndian);
-					short zfilterOrder = readShort(data, fileIsBigEndian);
-					float m_1_4 = readFloat(data, fileIsBigEndian);
-					float m_2_4 = readFloat(data, fileIsBigEndian);
-					float m_3_4 = readFloat(data, fileIsBigEndian);
-					short scatterType = readShort(data, fileIsBigEndian);
-					short reconType = readShort(data, fileIsBigEndian);
-					short reconViews = readShort(data, fileIsBigEndian);
-					short[] fillCti = new short[87];
-					for (int i = 0; i < fillCti.length; i++) {
-						fillCti[i] = readShort(data, fileIsBigEndian);
-					}
-					fillUser = new short[49];
-					for (int i = 0; i < fillUser.length; i++) {
-						fillUser[i] = readShort(data, fileIsBigEndian);
-					}
-
-					if (coordSpace == null) {
-						
-						int numLegitDimensions = 0;
-						for (int i  = 0; i < numDimensions; i++) {
-							if (dims[i] > 1)
-								numLegitDimensions++;
-						}
-
-						if (m_1_1 != 0 || m_1_2 != 0 || m_1_3 != 0 || m_1_4 != 0 || 
-								m_2_1 != 0 || m_2_2 != 0 || m_2_3 != 0 || m_2_4 != 0 || 
-								m_3_1 != 0 || m_3_2 != 0 || m_3_3 != 0 || m_3_4 != 0)
-						{
-							if (numLegitDimensions == 2) {
-								float u1=0,u2=0,u3=0,v1=0,v2=0,v3=0;
-								if (numDimensions == 3) {
-									if (xDimension <= 1) {
-										u1 = m_2_2;
-										u2 = m_2_3;
-										u3 = m_2_4;
-										v1 = m_3_2;
-										v2 = m_3_3;
-										v3 = m_3_4;
-									}
-									else if (yDimension <= 1) {
-										u1 = m_1_1;
-										u2 = m_1_3;
-										u3 = m_1_4;
-										v1 = m_3_1;
-										v2 = m_3_3;
-										v3 = m_3_4;
-									}
-									else if (zDimension <= 1) {
-										u1 = m_1_1;
-										u2 = m_1_2;
-										u3 = m_1_4;
-										v1 = m_2_1;
-										v2 = m_2_2;
-										v3 = m_2_4;
-									}
-									else {
-										throw new IllegalArgumentException("unexpected num non trivial dimensions");
-									}
-									coordSpace =
-											new Affine2dCoordinateSpace(
-													BigDecimal.valueOf(u1), 
-													BigDecimal.valueOf(u2),
-													BigDecimal.valueOf(u3),
-													BigDecimal.valueOf(v1),
-													BigDecimal.valueOf(v2),
-													BigDecimal.valueOf(v3));
-									
+								// now record the frame address etc. for valid frames only
+								
+								if (i < numFrames) {
+									frameAddresses[frame+i] = 512*(subheaderBlockNum-1);
+									matrixNumbers[frame+i] = matrixNumber;
 								}
-								else if (numDimensions == 2) {
-									coordSpace =
-											new Affine2dCoordinateSpace(
+							}
+						}
+					}
+					
+		//			for (int i = 0; i < frameAddresses.length; i++) {
+		//				System.out.println("frame " + i + " address = " + frameAddresses[i]);
+		//				System.out.println("  matrix number = " + matrixNumbers[i]);
+		//			}
+					
+					for (int f = 0; f < numFrames; f++) {
+		
+						System.out.println("BEGIN READ FRAME "+f+" AND FILE POS = "+c1.pos);
+						
+						List<IndexedDataSource<Allocatable>> threeDChunks = new LinkedList<>();
+						CoordinateSpace coordSpace = null;
+						short dataType = -4000;
+						short xDimension = 0, yDimension = 0, zDimension = 0;
+						BigDecimal[] scales = new BigDecimal[0];
+						BigDecimal[] offsets = new BigDecimal[0];
+						String[] axisNames = new String[0];
+						IndexedDataSource<Allocatable> frameData = null;
+						
+						long[] dims = new long[0];
+						short numDimensions = 0;
+						int frameDuration;
+						short numAngles;
+						float numAnglesF;  // spec says yes, this is a float
+						short numRElements;
+						float numRElementsF;  // spec says yes, this is a float
+						int frameStartTime;
+						int gateDuration;
+						int rWaveOffset;
+						int numAcceptedBeats;
+						short ringDifference;
+						short span;
+						short storageOrder;
+						float scaleFactor = 0;
+						float xOffset, yOffset, zOffset;
+						float xResolution, yResolution, zResolution, wResolution;
+						short[] fillUser;
+						boolean signedDataFlag = false;
+						
+						double rUnit=0, thetaUnit=0, zUnit=0;
+						
+						switch (fileType) {
+						
+						case 3:  // attenuation data
+							
+							dataType = readShort(data, fileIsBigEndian);
+							numDimensions = readShort(data, fileIsBigEndian);
+							dims = new long[numDimensions];
+							short attenType = readShort(data, fileIsBigEndian); // Added TJB 20170223
+							numRElements = readShort(data, fileIsBigEndian);
+							numAngles = readShort(data, fileIsBigEndian);   
+							short numZElements = readShort(data, fileIsBigEndian);
+							if (numDimensions > 0)
+								dims[0] = numRElements;
+							if (numDimensions > 1)
+								dims[1] = numAngles;
+							if (numDimensions > 2)
+								dims[2] = numZElements;
+							for (int i = 3; i < numDimensions; i++) {
+								dims[i] = 1;
+							}
+							ringDifference = readShort(data, fileIsBigEndian);
+							xResolution = readFloat(data, fileIsBigEndian);
+							yResolution = readFloat(data, fileIsBigEndian);
+							zResolution = readFloat(data, fileIsBigEndian);
+							wResolution = readFloat(data, fileIsBigEndian);
+							scaleFactor = readFloat(data, fileIsBigEndian);
+							xOffset = readFloat(data, fileIsBigEndian);
+							yOffset = readFloat(data, fileIsBigEndian);
+							float xRadius = readFloat(data, fileIsBigEndian);
+							float yRadius = readFloat(data, fileIsBigEndian);
+							float tiltAngle = readFloat(data, fileIsBigEndian);
+							float attenuationCoeff = readFloat(data, fileIsBigEndian);
+							float attenuationMin = readFloat(data, fileIsBigEndian);
+							float attenuationMax = readFloat(data, fileIsBigEndian);
+							signedDataFlag = attenuationMin < 0;
+							float skullThickness = readFloat(data, fileIsBigEndian);
+							short numAdditionalAttenCoeff = readShort(data, fileIsBigEndian);
+							float[] additionalAttenCoeff = new float[8];
+							for (int i = 0; i < additionalAttenCoeff.length; i++) {
+								additionalAttenCoeff[i] = readFloat(data, fileIsBigEndian);
+							}
+							float edgeFindingThreshold = readFloat(data, fileIsBigEndian);
+							storageOrder = readShort(data, fileIsBigEndian);
+							span = readShort(data, fileIsBigEndian);
+							short[] zElements = new short[64];
+							for (int i = 0; i < zElements.length; i++) {
+								zElements[i] = readShort(data, fileIsBigEndian);
+							}
+							short[] fillUnused = new short[86];
+							for (int i = 0; i < fillUnused.length; i++) {
+								fillUnused[i] = readShort(data, fileIsBigEndian);
+							}
+							fillUser = new short[50];
+							for (int i = 0; i < fillUser.length; i++) {
+								fillUser[i] = readShort(data, fileIsBigEndian);
+							}
+							rUnit = xResolution;
+							thetaUnit = yResolution;
+							zUnit = zResolution;
+							if (numZElements > 1) {
+								coordSpace = new Cylindrical3dCoordinateSpace(
+										BigDecimal.valueOf(rUnit),
+										BigDecimal.valueOf(thetaUnit),
+										BigDecimal.valueOf(zUnit)
+										);
+								axisNames = new String[3];
+								axisNames[0] = "r";
+								axisNames[1] = "theta";
+								axisNames[2] = "z";
+							}
+							else {
+								coordSpace = new Polar2dCoordinateSpace(
+										BigDecimal.valueOf(rUnit),
+										BigDecimal.valueOf(thetaUnit)
+										);
+								axisNames = new String[2];
+								axisNames[0] = "r";
+								axisNames[1] = "theta";
+							}
+							break;
+							
+						case 7:  // image data
+						
+							dataType = readShort(data, fileIsBigEndian);
+							numDimensions = readShort(data, fileIsBigEndian);
+							dims = new long[numDimensions];
+							xDimension = readShort(data, fileIsBigEndian);
+							yDimension = readShort(data, fileIsBigEndian);
+							zDimension = readShort(data, fileIsBigEndian);
+							if (numDimensions > 0)
+								dims[0] = xDimension;
+							if (numDimensions > 1)
+								dims[1] = yDimension;
+							if (numDimensions > 2)
+								dims[2] = zDimension;
+							for (int i = 3; i < numDimensions; i++) {
+								dims[i] = 1;
+							}
+							System.out.println("data type == " + dataType);
+							System.out.println("dims == " + Arrays.toString(dims));
+							xOffset = readFloat(data, fileIsBigEndian);
+							yOffset = readFloat(data, fileIsBigEndian);
+							zOffset = readFloat(data, fileIsBigEndian);
+							float reconZoom = readFloat(data, fileIsBigEndian);
+							scaleFactor = readFloat(data, fileIsBigEndian);
+							short imageMin = readShort(data, fileIsBigEndian);
+							signedDataFlag = imageMin < 0;
+							short imageMax = readShort(data, fileIsBigEndian);
+							float xPixelSize = readFloat(data, fileIsBigEndian);
+							float yPixelSize = readFloat(data, fileIsBigEndian);
+							float zPixelSize = readFloat(data, fileIsBigEndian);
+							frameDuration = readInt(data, fileIsBigEndian);
+							frameStartTime = readInt(data, fileIsBigEndian);
+							short filterCode = readShort(data, fileIsBigEndian);
+							xResolution = readFloat(data, fileIsBigEndian);
+							yResolution = readFloat(data, fileIsBigEndian);
+							zResolution = readFloat(data, fileIsBigEndian);
+							numRElementsF = readFloat(data, fileIsBigEndian);
+							numAnglesF = readFloat(data, fileIsBigEndian);
+							float zRotationAngle = readFloat(data, fileIsBigEndian);
+							float decayCorrFctr = readFloat(data, fileIsBigEndian);
+							int processingCode = readInt(data, fileIsBigEndian);  // % see interpCodes(sh.processing_code) function below
+							gateDuration = readInt(data, fileIsBigEndian);
+							rWaveOffset = readInt(data, fileIsBigEndian);
+							numAcceptedBeats = readInt(data, fileIsBigEndian);
+							float filterCutoffFrequency = readFloat(data, fileIsBigEndian);
+							float filterResolution = readFloat(data, fileIsBigEndian);
+							float filterRampSlope = readFloat(data, fileIsBigEndian);
+							short filterOrder = readShort(data, fileIsBigEndian);
+							float filterScatterFraction = readFloat(data, fileIsBigEndian);
+							float filterScatterSlope = readFloat(data, fileIsBigEndian);
+							String annotation = readString(data, 40);
+							float m_1_1 = readFloat(data, fileIsBigEndian);
+							float m_1_2 = readFloat(data, fileIsBigEndian);
+							float m_1_3 = readFloat(data, fileIsBigEndian);
+							float m_2_1 = readFloat(data, fileIsBigEndian);
+							float m_2_2 = readFloat(data, fileIsBigEndian);
+							float m_2_3 = readFloat(data, fileIsBigEndian);
+							float m_3_1 = readFloat(data, fileIsBigEndian);
+							float m_3_2 = readFloat(data, fileIsBigEndian);
+							float m_3_3 = readFloat(data, fileIsBigEndian);
+							float rfilterCutoff = readFloat(data, fileIsBigEndian);
+							float rfilterResolution = readFloat(data, fileIsBigEndian);
+							short rfilterCode = readShort(data, fileIsBigEndian);
+							short rfilterOrder = readShort(data, fileIsBigEndian);
+							float zfilterCutoff = readFloat(data, fileIsBigEndian);
+							float zfilterResolution = readFloat(data, fileIsBigEndian);
+							short zfilterCode = readShort(data, fileIsBigEndian);
+							short zfilterOrder = readShort(data, fileIsBigEndian);
+							float m_1_4 = readFloat(data, fileIsBigEndian);
+							float m_2_4 = readFloat(data, fileIsBigEndian);
+							float m_3_4 = readFloat(data, fileIsBigEndian);
+							short scatterType = readShort(data, fileIsBigEndian);
+							short reconType = readShort(data, fileIsBigEndian);
+							short reconViews = readShort(data, fileIsBigEndian);
+							short[] fillCti = new short[87];
+							for (int i = 0; i < fillCti.length; i++) {
+								fillCti[i] = readShort(data, fileIsBigEndian);
+							}
+							fillUser = new short[49];
+							for (int i = 0; i < fillUser.length; i++) {
+								fillUser[i] = readShort(data, fileIsBigEndian);
+							}
+		
+							if (coordSpace == null) {
+								
+								int numLegitDimensions = 0;
+								for (int i  = 0; i < numDimensions; i++) {
+									if (dims[i] > 1)
+										numLegitDimensions++;
+								}
+		
+								if (m_1_1 != 0 || m_1_2 != 0 || m_1_3 != 0 || m_1_4 != 0 || 
+										m_2_1 != 0 || m_2_2 != 0 || m_2_3 != 0 || m_2_4 != 0 || 
+										m_3_1 != 0 || m_3_2 != 0 || m_3_3 != 0 || m_3_4 != 0)
+								{
+									if (numLegitDimensions == 2) {
+										float u1=0,u2=0,u3=0,v1=0,v2=0,v3=0;
+										if (numDimensions == 3) {
+											if (xDimension <= 1) {
+												u1 = m_2_2;
+												u2 = m_2_3;
+												u3 = m_2_4;
+												v1 = m_3_2;
+												v2 = m_3_3;
+												v3 = m_3_4;
+											}
+											else if (yDimension <= 1) {
+												u1 = m_1_1;
+												u2 = m_1_3;
+												u3 = m_1_4;
+												v1 = m_3_1;
+												v2 = m_3_3;
+												v3 = m_3_4;
+											}
+											else if (zDimension <= 1) {
+												u1 = m_1_1;
+												u2 = m_1_2;
+												u3 = m_1_4;
+												v1 = m_2_1;
+												v2 = m_2_2;
+												v3 = m_2_4;
+											}
+											else {
+												throw new IllegalArgumentException("unexpected num non trivial dimensions");
+											}
+											coordSpace =
+													new Affine2dCoordinateSpace(
+															BigDecimal.valueOf(u1), 
+															BigDecimal.valueOf(u2),
+															BigDecimal.valueOf(u3),
+															BigDecimal.valueOf(v1),
+															BigDecimal.valueOf(v2),
+															BigDecimal.valueOf(v3));
+											
+										}
+										else if (numDimensions == 2) {
+											coordSpace =
+													new Affine2dCoordinateSpace(
+															BigDecimal.valueOf(m_1_1), 
+															BigDecimal.valueOf(m_1_2),
+															BigDecimal.valueOf(m_1_4),
+															BigDecimal.valueOf(m_2_1),
+															BigDecimal.valueOf(m_2_2),
+															BigDecimal.valueOf(m_2_4));
+										}
+									}
+										
+									if (numLegitDimensions == 3)
+										coordSpace =
+											new Affine3dCoordinateSpace(
 													BigDecimal.valueOf(m_1_1), 
 													BigDecimal.valueOf(m_1_2),
+													BigDecimal.valueOf(m_1_3),
 													BigDecimal.valueOf(m_1_4),
 													BigDecimal.valueOf(m_2_1),
 													BigDecimal.valueOf(m_2_2),
-													BigDecimal.valueOf(m_2_4));
+													BigDecimal.valueOf(m_2_3),
+													BigDecimal.valueOf(m_2_4),
+													BigDecimal.valueOf(m_3_1),
+													BigDecimal.valueOf(m_3_2),
+													BigDecimal.valueOf(m_3_3),
+													BigDecimal.valueOf(m_3_4));
 								}
-							}
-								
-							if (numLegitDimensions == 3)
-								coordSpace =
-									new Affine3dCoordinateSpace(
-											BigDecimal.valueOf(m_1_1), 
-											BigDecimal.valueOf(m_1_2),
-											BigDecimal.valueOf(m_1_3),
-											BigDecimal.valueOf(m_1_4),
-											BigDecimal.valueOf(m_2_1),
-											BigDecimal.valueOf(m_2_2),
-											BigDecimal.valueOf(m_2_3),
-											BigDecimal.valueOf(m_2_4),
-											BigDecimal.valueOf(m_3_1),
-											BigDecimal.valueOf(m_3_2),
-											BigDecimal.valueOf(m_3_3),
-											BigDecimal.valueOf(m_3_4));
-						}
-						else {
-
-							scales = new BigDecimal[numLegitDimensions];
-							offsets = new BigDecimal[numLegitDimensions];
-							axisNames = new String[numLegitDimensions];
-
-							int counted = 0;
-							for (int i = 0; i < numDimensions; i++) {
-								if (i == 0 && xDimension > 1) {
-									scales[counted] = BigDecimal.valueOf(xPixelSize);
-									offsets[counted] = BigDecimal.valueOf(xOffset);
-									axisNames[counted] = "x";
-									counted++;
-								}
-								else if (i == 1 && yDimension > 1) {
-									scales[counted] = BigDecimal.valueOf(yPixelSize);
-									offsets[counted] = BigDecimal.valueOf(yOffset);
-									axisNames[counted] = "y";
-									counted++;
-								}
-								else if (i == 2 && zDimension > 1) {
-									scales[counted] = BigDecimal.valueOf(zPixelSize);
-									offsets[counted] = BigDecimal.valueOf(zOffset);
-									axisNames[counted] = "z";
-									counted++;
-								}
-								else if (i >= 3 && dims.length >= 3 && dims[i] > 1) {
-									scales[counted] = BigDecimal.ONE;
-									offsets[counted] = BigDecimal.ZERO;
-									axisNames[counted] = "unknown";
-									counted++;
-								}
-							}
-							coordSpace = new LinearNdCoordinateSpace(scales, offsets);
-						}
-					}
-						
-					break;
-				
-				case 11:  // 3d scan (sinogram) data file
-					
-					dataType = readShort(data, fileIsBigEndian);
-					numDimensions = readShort(data, fileIsBigEndian);
-					numRElements = readShort(data, fileIsBigEndian);
-					numAngles = readShort(data, fileIsBigEndian);
-					short correctionsApplied = readShort(data, fileIsBigEndian);
-					numZElements = readShort(data, fileIsBigEndian);
-					dims = new long[numDimensions];
-					if (numDimensions > 0)
-						dims[0] = numRElements;
-					if (numDimensions > 1)
-						dims[1] = numAngles;
-					if (numDimensions > 2)
-						dims[2] = numZElements;
-					for (int i = 3; i < numDimensions; i++) {
-						dims[i] = 1;
-					}
-					ringDifference = readShort(data, fileIsBigEndian);
-					xResolution = readFloat(data, fileIsBigEndian);
-					yResolution = readFloat(data, fileIsBigEndian);
-					zResolution = readFloat(data, fileIsBigEndian);
-					wResolution = readFloat(data, fileIsBigEndian);
-					short[] fill = new short[6];
-					for (int i = 0; i < fill.length; i++) {
-						fill[i] = readShort(data, fileIsBigEndian);
-					}
-					gateDuration = readInt(data, fileIsBigEndian); // TODO: make unsigned
-					rWaveOffset = readInt(data, fileIsBigEndian);
-					numAcceptedBeats = readInt(data, fileIsBigEndian);
-					scaleFactor = readFloat(data, fileIsBigEndian);
-					short scanMin = readShort(data, fileIsBigEndian);
-					short scanMax = readShort(data, fileIsBigEndian);
-					signedDataFlag = scanMin < 0;
-					int prompts = readInt(data, fileIsBigEndian);
-					int delayed = readInt(data, fileIsBigEndian);
-					int multiples = readInt(data, fileIsBigEndian);
-					int netTrues = readInt(data, fileIsBigEndian);
-					float[] corSingles = new float[16];
-					for (int i = 0; i < corSingles.length; i++) {
-						corSingles[i] = readFloat(data, fileIsBigEndian);
-					}
-					float[] uncorSingles = new float[16];
-					for (int i = 0; i < uncorSingles.length; i++) {
-						uncorSingles[i] = readFloat(data, fileIsBigEndian);
-					}
-					float totAvgCor = readFloat(data, fileIsBigEndian);
-					float totAvgUncor = readFloat(data, fileIsBigEndian);
-					int totCoinRate = readInt(data, fileIsBigEndian);
-					frameStartTime = readInt(data, fileIsBigEndian);
-					frameDuration = readInt(data, fileIsBigEndian);
-					float lossCorrectionFactor = readFloat(data, fileIsBigEndian);
-					int[] physicalPlanes = new int[8];
-					for (int i = 0; i < physicalPlanes.length; i++) {
-						physicalPlanes[i] = readInt(data, fileIsBigEndian);
-					}
-					rUnit = xResolution;
-					thetaUnit = yResolution;
-					zUnit = zResolution;
-					if (numZElements > 1) {
-						coordSpace = new Cylindrical3dCoordinateSpace(
-								BigDecimal.valueOf(rUnit),
-								BigDecimal.valueOf(thetaUnit),
-								BigDecimal.valueOf(zUnit)
-								);
-						axisNames = new String[3];
-						axisNames[0] = "r";
-						axisNames[1] = "theta";
-						axisNames[2] = "z";
-					}
-					else {
-						coordSpace = new Polar2dCoordinateSpace(
-								BigDecimal.valueOf(rUnit),
-								BigDecimal.valueOf(thetaUnit)
-								);
-						axisNames = new String[2];
-						axisNames[0] = "r";
-						axisNames[1] = "theta";
-					}
-					break;
-				
-				case 13:  // 3d normalization
-				
-					dataType = readShort(data, fileIsBigEndian);
-					numDimensions = readShort(data, fileIsBigEndian);
-					numRElements = readShort(data, fileIsBigEndian);
-					numAngles = readShort(data, fileIsBigEndian);
-					numZElements = readShort(data, fileIsBigEndian);
-					dims = new long[numDimensions];
-					if (numDimensions > 0)
-						dims[0] = numRElements;
-					if (numDimensions > 1)
-						dims[1] = numAngles;
-					if (numDimensions > 2)
-						dims[2] = numZElements;
-					for (int i = 3; i < numDimensions; i++) {
-						dims[i] = 1;
-					}
-					ringDifference = readShort(data, fileIsBigEndian);
-					scaleFactor = readFloat(data, fileIsBigEndian);
-					float normMin = readFloat(data, fileIsBigEndian);
-					float normMax = readFloat(data, fileIsBigEndian);
-					signedDataFlag = normMin < 0;
-					float fov_source_width = readFloat(data, fileIsBigEndian);
-					float norm_quality_factor = readFloat(data, fileIsBigEndian);
-					short norm_quality_factor_code = readShort(data, fileIsBigEndian);
-					storageOrder = readShort(data, fileIsBigEndian);
-					span = readShort(data, fileIsBigEndian);
-					zElements = new short[64];
-					for (int i = 0; i < zElements.length; i++) {
-						zElements[i] = readShort(data, fileIsBigEndian);
-					}
-					fillCti = new short[123];
-					for (int i = 0; i < fillCti.length; i++) {
-						fillCti[i] = readShort(data, fileIsBigEndian);
-					}
-					fillUser = new short[50];
-					for (int i = 0; i < fillUser.length; i++) {
-						fillUser[i] = readShort(data, fileIsBigEndian);
-					}
-					rUnit = 1.0;  // TODO do this better
-					thetaUnit = Math.PI * 2 / numAngles;
-					zUnit =  1.0;  // TODO do this better
-					if (numZElements > 1) {
-						coordSpace = new Cylindrical3dCoordinateSpace(
-								BigDecimal.valueOf(rUnit),
-								BigDecimal.valueOf(thetaUnit),
-								BigDecimal.valueOf(zUnit)
-								);
-						axisNames = new String[3];
-						axisNames[0] = "r";
-						axisNames[1] = "theta";
-						axisNames[2] = "z";
-					}
-					else {
-						coordSpace = new Polar2dCoordinateSpace(
-								BigDecimal.valueOf(rUnit),
-								BigDecimal.valueOf(thetaUnit)
-								);
-						axisNames = new String[2];
-						axisNames[0] = "r";
-						axisNames[1] = "theta";
-					}
-					break;
-				
-				default:
-					// skip unknown header?
-					//c1.goForwardTo(desiredPos);
-					System.out.println("ECAT: unknown file type ("+fileType+") : no data was read!");
-				}
+								else {
 		
-				if (dataType > 0) {
-					
-					System.out.println("  READING IMAGE DATA FROM POS " + c1.pos);
-
-					Allocatable type = value(dataType, signedDataFlag);
-					
-					frameData = Storage.allocate(type, 1L*dims[0]*dims[1]*numPlanes);
-
-					long numElements = frameData.size();
-					for (long i = 0; i < numElements; i++) {
-						readValue(data, dataType, signedDataFlag, fileIsBigEndian, type);
-						frameData.set(i, type);
-					}
-
-					threeDChunks.add(frameData);
-
-					System.out.println("  FINISHED READING PLANE AND POS IS " + c1.pos);
-
-					if (c1.pos % 512 > 0) {
-						c1.skip(512 - (c1.pos % 512));
-					}
-				}
-				
-				dims = numPlanes > 1 ?
-						new long[] {dims[0], dims[1], numPlanes}
-						:
-						new long[] {dims[0], dims[1]};
-
-				if (dataType != 0) {
-				
-					int numChunks = threeDChunks.size();
-					for (int chnk = 0; chnk < numChunks; chnk++) {
-						
-						Allocatable type = value(dataType, signedDataFlag);
-						
-						DimensionedDataSource<Allocatable> ds =
-								DimensionedStorage.allocate(type, dims);
-						
-						frameData = threeDChunks.get(chnk);
-						long numElements = frameData.size();
-						for (long u = 0; u < numElements; u++) {
-							frameData.get(u, type);
-							ds.rawData().set(u, type);
-						}
-						
-						// does the header have a scale factor associated with it?
-						
-						if (scaleFactor != 0 && scaleFactor != 1) {
-						
-							// apply scale factor
-							
-							if (type instanceof Float64Member) {
-								
-								// a double data set can be scaled just fine
-								
-								ScaleByDouble.compute(G.DBL, (double) scaleFactor,
-														(IndexedDataSource) ds.rawData(),
-														(IndexedDataSource) ds.rawData());
+									scales = new BigDecimal[numLegitDimensions];
+									offsets = new BigDecimal[numLegitDimensions];
+									axisNames = new String[numLegitDimensions];
+		
+									int counted = 0;
+									for (int i = 0; i < numDimensions; i++) {
+										if (i == 0 && xDimension > 1) {
+											scales[counted] = BigDecimal.valueOf(xPixelSize);
+											offsets[counted] = BigDecimal.valueOf(xOffset);
+											axisNames[counted] = "x";
+											counted++;
+										}
+										else if (i == 1 && yDimension > 1) {
+											scales[counted] = BigDecimal.valueOf(yPixelSize);
+											offsets[counted] = BigDecimal.valueOf(yOffset);
+											axisNames[counted] = "y";
+											counted++;
+										}
+										else if (i == 2 && zDimension > 1) {
+											scales[counted] = BigDecimal.valueOf(zPixelSize);
+											offsets[counted] = BigDecimal.valueOf(zOffset);
+											axisNames[counted] = "z";
+											counted++;
+										}
+										else if (i >= 3 && dims.length >= 3 && dims[i] > 1) {
+											scales[counted] = BigDecimal.ONE;
+											offsets[counted] = BigDecimal.ZERO;
+											axisNames[counted] = "unknown";
+											counted++;
+										}
+									}
+									coordSpace = new LinearNdCoordinateSpace(scales, offsets);
+								}
 							}
-							else if (type instanceof Float32Member) {
-
-								// a float data set can be scaled just fine
 								
-								ScaleByDouble.compute(G.FLT, (double) scaleFactor,
-										(IndexedDataSource) ds.rawData(),
-										(IndexedDataSource) ds.rawData());
+							break;
+						
+						case 11:  // 3d scan (sinogram) data file
+							
+							dataType = readShort(data, fileIsBigEndian);
+							numDimensions = readShort(data, fileIsBigEndian);
+							numRElements = readShort(data, fileIsBigEndian);
+							numAngles = readShort(data, fileIsBigEndian);
+							short correctionsApplied = readShort(data, fileIsBigEndian);
+							numZElements = readShort(data, fileIsBigEndian);
+							dims = new long[numDimensions];
+							if (numDimensions > 0)
+								dims[0] = numRElements;
+							if (numDimensions > 1)
+								dims[1] = numAngles;
+							if (numDimensions > 2)
+								dims[2] = numZElements;
+							for (int i = 3; i < numDimensions; i++) {
+								dims[i] = 1;
+							}
+							ringDifference = readShort(data, fileIsBigEndian);
+							xResolution = readFloat(data, fileIsBigEndian);
+							yResolution = readFloat(data, fileIsBigEndian);
+							zResolution = readFloat(data, fileIsBigEndian);
+							wResolution = readFloat(data, fileIsBigEndian);
+							short[] fill = new short[6];
+							for (int i = 0; i < fill.length; i++) {
+								fill[i] = readShort(data, fileIsBigEndian);
+							}
+							gateDuration = readInt(data, fileIsBigEndian); // TODO: make unsigned
+							rWaveOffset = readInt(data, fileIsBigEndian);
+							numAcceptedBeats = readInt(data, fileIsBigEndian);
+							scaleFactor = readFloat(data, fileIsBigEndian);
+							short scanMin = readShort(data, fileIsBigEndian);
+							short scanMax = readShort(data, fileIsBigEndian);
+							signedDataFlag = scanMin < 0;
+							int prompts = readInt(data, fileIsBigEndian);
+							int delayed = readInt(data, fileIsBigEndian);
+							int multiples = readInt(data, fileIsBigEndian);
+							int netTrues = readInt(data, fileIsBigEndian);
+							float[] corSingles = new float[16];
+							for (int i = 0; i < corSingles.length; i++) {
+								corSingles[i] = readFloat(data, fileIsBigEndian);
+							}
+							float[] uncorSingles = new float[16];
+							for (int i = 0; i < uncorSingles.length; i++) {
+								uncorSingles[i] = readFloat(data, fileIsBigEndian);
+							}
+							float totAvgCor = readFloat(data, fileIsBigEndian);
+							float totAvgUncor = readFloat(data, fileIsBigEndian);
+							int totCoinRate = readInt(data, fileIsBigEndian);
+							frameStartTime = readInt(data, fileIsBigEndian);
+							frameDuration = readInt(data, fileIsBigEndian);
+							float lossCorrectionFactor = readFloat(data, fileIsBigEndian);
+							int[] physicalPlanes = new int[8];
+							for (int i = 0; i < physicalPlanes.length; i++) {
+								physicalPlanes[i] = readInt(data, fileIsBigEndian);
+							}
+							rUnit = xResolution;
+							thetaUnit = yResolution;
+							zUnit = zResolution;
+							if (numZElements > 1) {
+								coordSpace = new Cylindrical3dCoordinateSpace(
+										BigDecimal.valueOf(rUnit),
+										BigDecimal.valueOf(thetaUnit),
+										BigDecimal.valueOf(zUnit)
+										);
+								axisNames = new String[3];
+								axisNames[0] = "r";
+								axisNames[1] = "theta";
+								axisNames[2] = "z";
 							}
 							else {
-								
-								// an integer based data set cannot be scaled without some
-								//   data loss so transform it into a float data set (because
-								//   our scale factor is a float).
-
-								Allocatable floatType = G.FLT.construct();
-										
-								DimensionedDataSource<Float32Member> floatDs =
-										DimensionedStorage.allocate(floatType, dims);
-								HighPrecRepresentation valAsHP = (HighPrecRepresentation) type;
-								HighPrecisionMember hpVal = G.HP.construct();
-								HighPrecisionMember scale = G.HP.construct(scaleFactor);
-								Float32Member fltVal = G.FLT.construct();
-								IndexedDataSource<Allocatable> rawData = ds.rawData();
-								long numElems = rawData.size();
-								for (long i = 0; i < numElems; i++) {
-									rawData.get(i, type);
-									valAsHP.toHighPrec(hpVal);
-									G.HP.multiply().call(hpVal, scale, hpVal);
-									fltVal.fromHighPrec(hpVal);
-									floatDs.rawData().set(i, fltVal);
-								}
-								ds = (DimensionedDataSource) floatDs;
-								type = floatType;
+								coordSpace = new Polar2dCoordinateSpace(
+										BigDecimal.valueOf(rUnit),
+										BigDecimal.valueOf(thetaUnit)
+										);
+								axisNames = new String[2];
+								axisNames[0] = "r";
+								axisNames[1] = "theta";
+							}
+							break;
+						
+						case 13:  // 3d normalization
+						
+							dataType = readShort(data, fileIsBigEndian);
+							numDimensions = readShort(data, fileIsBigEndian);
+							numRElements = readShort(data, fileIsBigEndian);
+							numAngles = readShort(data, fileIsBigEndian);
+							numZElements = readShort(data, fileIsBigEndian);
+							dims = new long[numDimensions];
+							if (numDimensions > 0)
+								dims[0] = numRElements;
+							if (numDimensions > 1)
+								dims[1] = numAngles;
+							if (numDimensions > 2)
+								dims[2] = numZElements;
+							for (int i = 3; i < numDimensions; i++) {
+								dims[i] = 1;
+							}
+							ringDifference = readShort(data, fileIsBigEndian);
+							scaleFactor = readFloat(data, fileIsBigEndian);
+							float normMin = readFloat(data, fileIsBigEndian);
+							float normMax = readFloat(data, fileIsBigEndian);
+							signedDataFlag = normMin < 0;
+							float fov_source_width = readFloat(data, fileIsBigEndian);
+							float norm_quality_factor = readFloat(data, fileIsBigEndian);
+							short norm_quality_factor_code = readShort(data, fileIsBigEndian);
+							storageOrder = readShort(data, fileIsBigEndian);
+							span = readShort(data, fileIsBigEndian);
+							zElements = new short[64];
+							for (int i = 0; i < zElements.length; i++) {
+								zElements[i] = readShort(data, fileIsBigEndian);
+							}
+							fillCti = new short[123];
+							for (int i = 0; i < fillCti.length; i++) {
+								fillCti[i] = readShort(data, fileIsBigEndian);
+							}
+							fillUser = new short[50];
+							for (int i = 0; i < fillUser.length; i++) {
+								fillUser[i] = readShort(data, fileIsBigEndian);
+							}
+							rUnit = 1.0;  // TODO do this better
+							thetaUnit = Math.PI * 2 / numAngles;
+							zUnit =  1.0;  // TODO do this better
+							if (numZElements > 1) {
+								coordSpace = new Cylindrical3dCoordinateSpace(
+										BigDecimal.valueOf(rUnit),
+										BigDecimal.valueOf(thetaUnit),
+										BigDecimal.valueOf(zUnit)
+										);
+								axisNames = new String[3];
+								axisNames[0] = "r";
+								axisNames[1] = "theta";
+								axisNames[2] = "z";
+							}
+							else {
+								coordSpace = new Polar2dCoordinateSpace(
+										BigDecimal.valueOf(rUnit),
+										BigDecimal.valueOf(thetaUnit)
+										);
+								axisNames = new String[2];
+								axisNames[0] = "r";
+								axisNames[1] = "theta";
+							}
+							break;
+						
+						default:
+							// skip unknown header?
+							//c1.goForwardTo(desiredPos);
+							System.out.println("ECAT: unknown file type ("+fileType+") : no data was read!");
+						}
+				
+						if (dataType > 0) {
+							
+							System.out.println("  READING IMAGE DATA FROM POS " + c1.pos);
+		
+							Allocatable type = value(dataType, signedDataFlag);
+							
+							frameData = Storage.allocate(type, 1L*dims[0]*dims[1]*numPlanes);
+		
+							long numElements = frameData.size();
+							for (long i = 0; i < numElements; i++) {
+								readValue(data, dataType, signedDataFlag, fileIsBigEndian, type);
+								frameData.set(i, type);
+							}
+		
+							threeDChunks.add(frameData);
+		
+							System.out.println("  FINISHED READING PLANE AND POS IS " + c1.pos);
+		
+							if (c1.pos % 512 > 0) {
+								c1.skip(512 - (c1.pos % 512));
 							}
 						}
 						
-						ds.setName(filename);
-						ds.setSource(fname);
+						dims = numPlanes > 1 ?
+								new long[] {dims[0], dims[1], numPlanes}
+								:
+								new long[] {dims[0], dims[1]};
+		
+						if (dataType != 0) {
 						
-						if (ds.numDimensions() > 0) ds.setAxisType(0, axisNames[0]);
-						if (ds.numDimensions() > 1) ds.setAxisType(1, axisNames[1]);
-						if (ds.numDimensions() > 2) ds.setAxisType(2, axisNames[2]);
-						
-						if (coordSpace != null) ds.setCoordinateSpace(coordSpace);
-						
-						ds.setValueUnit(dataUnits);
-						
-						merge(images, ds, type);
+							int numChunks = threeDChunks.size();
+							for (int chnk = 0; chnk < numChunks; chnk++) {
+								
+								Allocatable type = value(dataType, signedDataFlag);
+								
+								DimensionedDataSource<Allocatable> ds =
+										DimensionedStorage.allocate(type, dims);
+								
+								frameData = threeDChunks.get(chnk);
+								long numElements = frameData.size();
+								for (long u = 0; u < numElements; u++) {
+									frameData.get(u, type);
+									ds.rawData().set(u, type);
+								}
+								
+								// does the header have a scale factor associated with it?
+								
+								if (scaleFactor != 0 && scaleFactor != 1) {
+								
+									// apply scale factor
+									
+									if (type instanceof Float64Member) {
+										
+										// a double data set can be scaled just fine
+										
+										ScaleByDouble.compute(G.DBL, (double) scaleFactor,
+																(IndexedDataSource) ds.rawData(),
+																(IndexedDataSource) ds.rawData());
+									}
+									else if (type instanceof Float32Member) {
+		
+										// a float data set can be scaled just fine
+										
+										ScaleByDouble.compute(G.FLT, (double) scaleFactor,
+												(IndexedDataSource) ds.rawData(),
+												(IndexedDataSource) ds.rawData());
+									}
+									else {
+										
+										// an integer based data set cannot be scaled without some
+										//   data loss so transform it into a float data set (because
+										//   our scale factor is a float).
+		
+										Allocatable floatType = G.FLT.construct();
+												
+										DimensionedDataSource<Float32Member> floatDs =
+												DimensionedStorage.allocate(floatType, dims);
+										HighPrecRepresentation valAsHP = (HighPrecRepresentation) type;
+										HighPrecisionMember hpVal = G.HP.construct();
+										HighPrecisionMember scale = G.HP.construct(scaleFactor);
+										Float32Member fltVal = G.FLT.construct();
+										IndexedDataSource<Allocatable> rawData = ds.rawData();
+										long numElems = rawData.size();
+										for (long i = 0; i < numElems; i++) {
+											rawData.get(i, type);
+											valAsHP.toHighPrec(hpVal);
+											G.HP.multiply().call(hpVal, scale, hpVal);
+											fltVal.fromHighPrec(hpVal);
+											floatDs.rawData().set(i, fltVal);
+										}
+										ds = (DimensionedDataSource) floatDs;
+										type = floatType;
+									}
+								}
+								
+								ds.setName(filename);
+								ds.setSource(fname);
+								
+								if (ds.numDimensions() > 0) ds.setAxisType(0, axisNames[0]);
+								if (ds.numDimensions() > 1) ds.setAxisType(1, axisNames[1]);
+								if (ds.numDimensions() > 2) ds.setAxisType(2, axisNames[2]);
+								
+								if (coordSpace != null) ds.setCoordinateSpace(coordSpace);
+								
+								ds.setValueUnit(dataUnits);
+								
+								merge(images, ds, type);
+							}
+						}
 					}
 				}
 			}
@@ -810,7 +818,13 @@ public class Ecat {
 			    System.out.println("Err 2: " + ex);
 			}
 			System.out.println("Err 1: " + e);
-		}
+		};
+		
+		System.out.println();
+		System.out.println("FINAL SUMMARY");
+		System.out.println("  FILE BYTE LENGTH = " + file1.length());
+		System.out.println("  TOTAL BYTES READ = " + c1.pos);
+		
 		return images;
 	}
 
@@ -1137,6 +1151,6 @@ public class Ecat {
 	}
 	
 	public static void main(String[] args) {
-		DataBundle data = Ecat.loadAllDatasets("/home/bdz/images/ecat/099_S_2146_881_2be9_de11.v");
+		DataBundle data = Ecat.loadAllDatasets("/home/bdezonia/images/ecat/099_S_2146_881_2be9_de11.v");
 	}
 }

@@ -1150,7 +1150,7 @@ public class Ecat {
 		
 	}
 	
-	public static void main(String[] args) {
-		DataBundle data = Ecat.loadAllDatasets("/home/bdezonia/images/ecat/099_S_2146_881_2be9_de11.v");
+	/*public*/ static void main(String[] args) {
+		DataBundle data = Ecat.loadAllDatasets("/home/bdz/images/ecat/099_S_2146_881_2be9_de11.v");
 	}
 }

@@ -789,7 +789,7 @@ public class Ecat {
 									}
 								}
 								
-								ds.setName(filename);
+								ds.setName("Bed " + bedpos + " Gate " + gate + " Frame " + f + " of " + filename);
 								ds.setSource(fname);
 								
 								if (ds.numDimensions() > 0) ds.setAxisType(0, axisNames[0]);

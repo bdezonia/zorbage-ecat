@@ -75,9 +75,9 @@ public class Ecat {
 		PositionableInputStream c1 = null;
 
 		DataInputStream data = null;
-				
-		boolean fileIsBigEndian = false;
 		
+		boolean fileIsBigEndian = true;
+				
 		DataBundle images = new DataBundle();
 		
 		try {
@@ -96,12 +96,13 @@ public class Ecat {
 			short fileType = readShort(data, false);
 
 			if (fileType < 0 || fileType > 127) {
-				System.out.println("FILE IS BIG ENDIAN!!! SWAPPING WILL OCCUR!");
-				fileIsBigEndian = true;
+				System.out.println("FILE IS LITTLE ENDIAN!!! SWAPPING WILL OCCUR!");
 				swVersion = swapShort(swVersion);
 				systemType = swapShort(systemType);
 				fileType = swapShort(fileType);
+				fileIsBigEndian = false;
 			}
+			
 			String serialNumber = readString(data, 10);
 			int scanStartTime = readInt(data, fileIsBigEndian);
 			String isotopeName = readString(data, 8);
@@ -742,6 +743,8 @@ public class Ecat {
 								// does the header have a scale factor associated with it?
 								
 								if (scaleFactor != 0 && scaleFactor != 1) {
+									
+									System.out.println("SCALING DATA BY SCALEFACTOR "+scaleFactor);
 								
 									// apply scale factor
 									
@@ -762,7 +765,7 @@ public class Ecat {
 												(IndexedDataSource) ds.rawData());
 									}
 									else {
-										
+
 										// an integer based data set cannot be scaled without some
 										//   data loss so transform it into a float data set (because
 										//   our scale factor is a float).
@@ -820,7 +823,6 @@ public class Ecat {
 			System.out.println("Err 1: " + e);
 		};
 		
-		System.out.println();
 		System.out.println("FINAL SUMMARY");
 		System.out.println("  FILE BYTE LENGTH = " + file1.length());
 		System.out.println("  TOTAL BYTES READ = " + c1.pos);
@@ -957,20 +959,22 @@ public class Ecat {
 	
 	private static short readShort(DataInputStream str, boolean fileIsBigEndian) throws IOException {
 		short v = str.readShort();
-		if (fileIsBigEndian) v = swapShort(v);
+		// TODO
+		//if (!fileIsBigEndian) v = swapShort(v);
 		return v;
 	}
 	
 	private static int readInt(DataInputStream str, boolean fileIsBigEndian) throws IOException {
 		int v = str.readInt();
-		if (fileIsBigEndian) v = swapInt(v);
+		if (!fileIsBigEndian) v = swapIntBytes(v);
 		return v;
 	}
 	
 	private static float readFloat(DataInputStream str, boolean fileIsBigEndian) throws IOException {
-		if (fileIsBigEndian) {
+		if (!fileIsBigEndian) {
 			int bits = str.readInt();
-			bits = swapInt(bits);
+			bits = swapIntBytes(bits);
+			bits = swapIntWords(bits);
 			return Float.intBitsToFloat(bits);
 		}
 		return str.readFloat();
@@ -993,13 +997,13 @@ public class Ecat {
 
 	private static short readVaxI2(DataInputStream str, boolean fileIsBigEndian) throws IOException {
 		short v = str.readShort();
-		if (fileIsBigEndian) v = swapShort(v);
+		if (!fileIsBigEndian) v = swapShort(v);
 		return v;
 	}
 
 	private static int readVaxI4(DataInputStream str, boolean fileIsBigEndian) throws IOException {
 		int v = str.readInt();
-		if (fileIsBigEndian) v = swapInt(v);
+		if (!fileIsBigEndian) v = swapIntBytes(v);
 		return v;
 	}
 
@@ -1007,7 +1011,7 @@ public class Ecat {
 	
 	private static double readVaxR4(DataInputStream str, boolean fileIsBigEndian) throws IOException {
 		int bits = str.readInt();
-		if (fileIsBigEndian) {
+		if (!fileIsBigEndian) {
 			// TODO: also swap bytes within shorts?
 			//swap words
 			short lo = (short) ((bits >>  0) & 0xffff);
@@ -1025,7 +1029,7 @@ public class Ecat {
 
 	private static int readSunI4(DataInputStream str, boolean fileIsBigEndian) throws IOException {
 		int v = str.readInt();
-		if (!fileIsBigEndian) v = swapInt(v);
+		if (!fileIsBigEndian) v = swapIntBytes(v);
 		return v;
 	}
 
@@ -1057,12 +1061,18 @@ public class Ecat {
 		return (short) ((b0 << 8) | (b1 << 0));
 	}
 	
-	private static int swapInt(int in) {
+	private static int swapIntBytes(int in) {
 		int b0 = (in >> 0) & 0xff;
 		int b1 = (in >> 8) & 0xff;
 		int b2 = (in >> 16) & 0xff;
 		int b3 = (in >> 24) & 0xff;
 		return (b0 << 24) | (b1 << 16) | (b2 << 8) | (b3 << 0);
+	}
+	
+	private static int swapIntWords(int in) {
+		int b0 = (in >> 0) & 0xffff;
+		int b1 = (in >> 16) & 0xffff;
+		return (b0 << 16) | (b1 << 0);
 	}
 	
 	private static class PositionableInputStream extends InputStream {
@@ -1102,7 +1112,6 @@ public class Ecat {
 		}
 		
 		public void goForwardTo(long desiredPos) throws IOException {
-			System.out.println("Desired Pos " + desiredPos + "  Curr Pos " + pos);
 			long diff = desiredPos - pos;
 			if (diff >= 0) {
 				long numSkipped = in.skip(desiredPos - pos);

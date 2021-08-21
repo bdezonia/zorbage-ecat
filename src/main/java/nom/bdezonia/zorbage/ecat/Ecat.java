@@ -740,9 +740,10 @@ public class Ecat {
 									ds.rawData().set(u, type);
 								}
 								
-								// does the header have a scale factor associated with it?
+								// does the header have a scale factor associated with it? The lowerbound cutoff keeps
+								//   us from making a dataset where you can barely distinguish pixels from each other.
 								
-								if (scaleFactor != 0 && scaleFactor != 1) {
+								if (scaleFactor != 0 && scaleFactor != 1 && Math.abs(scaleFactor) > 0.001) {
 									
 									System.out.println("SCALING DATA BY SCALEFACTOR "+scaleFactor);
 								

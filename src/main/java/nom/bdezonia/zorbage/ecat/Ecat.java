@@ -1,5 +1,5 @@
 /*
-  Copyright (C) 2021 Barry DeZonia
+  Copyright (C) 2021-2022 Barry DeZonia
 
   This library is free software; you can redistribute it and/or modify it
   under the terms of the GNU Lesser General Public License as published by

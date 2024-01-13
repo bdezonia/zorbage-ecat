@@ -33,8 +33,6 @@ import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
 
-import javax.xml.crypto.URIReferenceException;
-
 import nom.bdezonia.zorbage.algebra.Allocatable;
 import nom.bdezonia.zorbage.algebra.G;
 import nom.bdezonia.zorbage.algebra.HighPrecRepresentation;
@@ -89,9 +87,7 @@ public class Ecat {
 	
 		} catch (URISyntaxException e) {
 			
-			System.out.println("Bad name for file: "+e.getMessage());
-			
-			return new DataBundle();
+			throw new IllegalArgumentException("Bad name for file: "+e.getMessage());
 		}
 	}
 

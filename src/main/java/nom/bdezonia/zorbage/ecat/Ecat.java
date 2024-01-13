@@ -25,9 +25,15 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.math.BigDecimal;
+import java.net.MalformedURLException;
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.net.URL;
 import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
+
+import javax.xml.crypto.URIReferenceException;
 
 import nom.bdezonia.zorbage.algebra.Allocatable;
 import nom.bdezonia.zorbage.algebra.G;
@@ -64,11 +70,39 @@ public class Ecat {
 	
 	// NOTE: so far headers are all from ecat 7. I can also make it support ecat 6 with more work.
 	
-	public static DataBundle readAllDatasets(String filename) {
-
-		File file1 = new File(filename);
+	/**
+	 * 
+	 * @param filename
+	 * @return
+	 */
+	public static
+	
+		DataBundle
 		
-		FileInputStream f1 = null;
+			readAllDatasets(String filename)
+	{
+		try {
+		
+			URI uri = new URI("file", null, new File(filename).getAbsolutePath(), null);
+			
+			return readAllDatasets(uri);
+	
+		} catch (URISyntaxException e) {
+			
+			System.out.println("Bad name for file: "+e.getMessage());
+			
+			return new DataBundle();
+		}
+	}
+
+	/**
+	 * 
+	 * @param fileURI
+	 * @return
+	 */
+	public static DataBundle readAllDatasets(URI fileURI) {
+
+		InputStream f1 = null;
 		
 		BufferedInputStream bf1 = null;
 
@@ -81,7 +115,8 @@ public class Ecat {
 		DataBundle images = new DataBundle();
 		
 		try {
-			f1 = new FileInputStream(file1);
+			
+			f1 = fileURI.toURL().openStream();
 			
 			bf1 = new BufferedInputStream(f1);
 			
@@ -794,7 +829,7 @@ public class Ecat {
 									}
 								}
 								
-								ds.setName("Bed " + bedpos + " Gate " + gate + " Frame " + f + " of " + filename);
+								ds.setName("Bed " + bedpos + " Gate " + gate + " Frame " + f);
 								ds.setSource(fname);
 								
 								if (ds.numDimensions() > 0) ds.setAxisType(0, axisNames[0]);
@@ -826,7 +861,6 @@ public class Ecat {
 		};
 		
 		System.out.println("FINAL SUMMARY");
-		System.out.println("  FILE BYTE LENGTH = " + file1.length());
 		System.out.println("  TOTAL BYTES READ = " + c1.pos);
 		
 		return images;

@@ -64,7 +64,7 @@ public class Ecat {
 	
 	// NOTE: so far headers are all from ecat 7. I can also make it support ecat 6 with more work.
 	
-	public static DataBundle loadAllDatasets(String filename) {
+	public static DataBundle readAllDatasets(String filename) {
 
 		File file1 = new File(filename);
 		
@@ -1162,6 +1162,6 @@ public class Ecat {
 	}
 	
 	/*public*/ static void main(String[] args) {
-		DataBundle data = Ecat.loadAllDatasets("/home/bdz/images/ecat/099_S_2146_881_2be9_de11.v");
+		DataBundle data = Ecat.readAllDatasets("/home/bdz/images/ecat/099_S_2146_881_2be9_de11.v");
 	}
 }

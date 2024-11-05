@@ -13,12 +13,12 @@ How to include zorbage-ecat in your Maven project
   <dependency>
     <groupId>io.github.bdezonia</groupId>
     <artifactId>zorbage-ecat</artifactId>
-    <version>0.0.8</version>
+    <version>0.1.0</version>
   </dependency>
   
 How to include zorbage-ecat in a different build system
 
-  See https://search.maven.org/artifact/io.github.bdezonia/zorbage-ecat/0.0.8/jar
+  See https://search.maven.org/artifact/io.github.bdezonia/zorbage-ecat/0.1.0/jar
   for instructions on how to reference zorbage-ecat in build systems such as
   Gradle or others.
 

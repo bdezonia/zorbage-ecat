@@ -565,7 +565,7 @@ public class Ecat {
 										else if (i >= 3 && dims.length >= 3 && dims[i] > 1) {
 											scales[counted] = BigDecimal.ONE;
 											offsets[counted] = BigDecimal.ZERO;
-											axisNames[counted] = "unknown";
+											axisNames[counted] = "unk";
 											counted++;
 										}
 									}
